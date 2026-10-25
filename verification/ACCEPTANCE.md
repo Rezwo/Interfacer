@@ -1,8 +1,8 @@
-# Initial public preview verification
+# Public package verification
 
 This is a clean package export with a new Git history. It does not include the private development archive or its machine-local receipts.
 
-## Checked for this export
+## Initial export checks
 
 - All **27 runtime Luau files** match the current practical package byte-for-byte. `SOURCE_IDENTITIES.json` records their SHA-256 values.
 - A fresh headless run recorded **253 passed, 0 failed, 78 skipped**. See `HEADLESS.json`. The skipped Roblox-specific checks are not counted as passes.
@@ -25,3 +25,9 @@ python verify_distribution.py --luau PATH_TO_COMPATIBLE_LUAU
 ```
 
 `--hashes-only` checks identity only and explicitly does not pass runtime acceptance. The distribution manifest excludes itself; review source changes before regenerating it.
+
+## Verbose naming and multiline blocks
+
+The working sources now include a mechanical style cleanup after the initial export. They no longer match the initial export byte-for-byte. Current hashes are in `SOURCE_IDENTITIES.json`; the change record is in `STYLE_CLEANUP.json`. All 27 optimized instruction disassemblies match the initial export. Headless tests and exact counts were rerun; no new native or timing run is claimed.
+
+Run `python verification/CheckStyle.py` to check the specific abbreviated bindings and compact return blocks corrected in this pass. This is a targeted guard, not a complete naming linter.

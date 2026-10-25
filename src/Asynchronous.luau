@@ -42,9 +42,9 @@ type Data = {
 	FetchIdentifier : number,
 }
 
-const function RunFetcher(Self : Data, Input : any, CurrentId : number, Refetching : any)
+const function RunFetcher(Self : Data, Input : any, CurrentIdentifier : number, Refetching : any)
 	local Passed, Result = pcall(Self.Fetcher, Input, ReadRawValue(Self.Data), Refetching)
-	if CurrentId == Self.FetchIdentifier then
+	if CurrentIdentifier == Self.FetchIdentifier then
 		Self.Loading:Set(false)
 		if Passed then
 			Self.HasResolved = true
@@ -59,12 +59,12 @@ end
 
 const function Trigger(Self : Data, Input : any, Refetching : any)
 	Self.FetchIdentifier += 1
-	local CurrentId = Self.FetchIdentifier
+	local CurrentIdentifier = Self.FetchIdentifier
 	Self.Loading:Set(true)
 	Self.Error:Set(nil)
 	Self.State:Set(if Self.HasResolved then "Refreshing" else "Pending")
 	RunUntracked()
-	TaskLibrary.spawn(RunFetcher, Self, Input, CurrentId, Refetching)
+	TaskLibrary.spawn(RunFetcher, Self, Input, CurrentIdentifier, Refetching)
 	RunRetracked()
 end
 
@@ -119,9 +119,9 @@ function Asynchronous.Destroy(Self : Data)
 	Self.Error:Destroy()
 	Self.Loading:Destroy()
 	Self.Effect:Destroy()
-	local NextId = Self.FetchIdentifier + 1
+	local NextIdentifier = Self.FetchIdentifier + 1
 	table.clear(Self :: any)
-	Self.FetchIdentifier = NextId
+	Self.FetchIdentifier = NextIdentifier
 end
 
 function Asynchronous.Mutate(Self : Data, Value : any)

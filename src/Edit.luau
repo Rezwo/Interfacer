@@ -395,7 +395,8 @@ const function BindModel(
 		end
 	end
 	table.insert(CleanupValues, CancelBinding)
-	local _, Active = BindTo(Record, TargetInstance, Property, IsAttribute, CleanupValues, CancelBinding)
+	local _, Active =
+		BindTo(Record, TargetInstance, Property, IsAttribute, CleanupValues, CancelBinding)
 	if not Active or Cancelled then
 		return
 	end
@@ -651,10 +652,13 @@ const function ApplyInstanceProperties(
 			table.clear(CleanupValues)
 		end
 		if KindOf(TargetInstance) == "Instance" then
-			table.insert(CleanupValues, TargetInstance.Destroying:Once(function()
-				Bind.RevokeInstance(TargetInstance)
-				CleanAll()
-			end))
+			table.insert(
+				CleanupValues,
+				TargetInstance.Destroying:Once(function()
+					Bind.RevokeInstance(TargetInstance)
+					CleanAll()
+				end)
+			)
 		end
 		if GetCurrentOwner() then
 			RegisterCleanup(CleanAll)
@@ -691,7 +695,13 @@ const function ApplyInstanceProperties(
 				if AttributeName == "" then
 					error('attribute name after "_attr_" cannot be empty', 0)
 				end
-				ApplyAttribute(TargetInstance, AttributeName, Value, AppliedAttributes, CleanupValues)
+				ApplyAttribute(
+					TargetInstance,
+					AttributeName,
+					Value,
+					AppliedAttributes,
+					CleanupValues
+				)
 				continue
 			elseif Second == 116 and string.sub(Property, 1, 5) == "_tag_" then
 				local TagName = string.sub(Property, 6)
@@ -828,7 +838,13 @@ const function ApplyInstanceProperties(
 
 	if Attributes then
 		for AttributeName, AttributeValue in Attributes do
-			ApplyAttribute(TargetInstance, AttributeName, AttributeValue, AppliedAttributes, CleanupValues)
+			ApplyAttribute(
+				TargetInstance,
+				AttributeName,
+				AttributeValue,
+				AppliedAttributes,
+				CleanupValues
+			)
 		end
 	end
 
@@ -954,7 +970,9 @@ const function ApplyInstanceProperties(
 			table.insert(
 				CleanupValues,
 				Signals[index]:Connect(function(... : any)
-					if not Released and not Bind.IsRevoked(TargetInstance) then Callback(...) end
+					if not Released and not Bind.IsRevoked(TargetInstance) then
+						Callback(...)
+					end
 				end) :: any
 			)
 		end
@@ -996,7 +1014,11 @@ const function Assign(TargetInstance : Instance, Values : { [string] : unknown }
 	end
 end
 
-const function ConfigureInstance(TargetInstance : Instance, ClassName : string, Properties : any) : Instance
+const function ConfigureInstance(
+	TargetInstance : Instance,
+	ClassName : string,
+	Properties : any
+) : Instance
 	Assign(TargetInstance, ALWAYS[ClassName])
 	Assign(TargetInstance, if Flags.Defaults then Defaults[ClassName] else nil)
 	return EditInstance(TargetInstance, Properties)

@@ -277,13 +277,13 @@ const function CreateMapper(List : any, MappingCallback : any, KeyedByValue : bo
 	local Cache : { [any] : any } = {}
 	local Nodes : { [any] : Node<any> } = {}
 	local CurrentKeys : { [any] : boolean } = {}
-	local CacheN = 0
+	local CachedItemCount = 0
 	local RebuildAborted = false
-	local RowA : any, RowB : any
+	local FirstMappingArgument : any, SecondMappingArgument : any
 
 	local function Build()
-		local FirstValue, SecondValue = RowA, RowB
-		RowA, RowB = nil, nil
+		local FirstValue, SecondValue = FirstMappingArgument, SecondMappingArgument
+		FirstMappingArgument, SecondMappingArgument = nil, nil
 		return MappingCallback(FirstValue, SecondValue)
 	end
 
@@ -294,17 +294,17 @@ const function CreateMapper(List : any, MappingCallback : any, KeyedByValue : bo
 		end
 
 		table.clear(CurrentKeys)
-		local Out = table.create(#Current)
+		local Output = table.create(#Current)
 
 		local MustScan = RebuildAborted
 		RebuildAborted = true
 		RunUntracked()
 
 		local Seen, Added = 0, 0
-		for index, Value in Current do
-			local Key : any, Held : any = index, Value
+		for Index, Value in Current do
+			local Key : any, Held : any = Index, Value
 			if KeyedByValue then
-				Key, Held = Value, index
+				Key, Held = Value, Index
 				if CurrentKeys[Key] ~= nil then
 					ReportWarning(
 						"[Flux] Flux.forValue: duplicate values share one mapped instance (the value is the cache key); use Flux.forIndex"
@@ -317,26 +317,26 @@ const function CreateMapper(List : any, MappingCallback : any, KeyedByValue : bo
 			local Record = Nodes[Key]
 			if Record ~= nil then
 				SetNodeValue(Record, Held)
-				Out[index] = Cache[Key]
+				Output[Index] = Cache[Key]
 			else
 				Record = CreateState(Held)
 				if KeyedByValue then
-					RowA, RowB = Record, Value
+					FirstMappingArgument, SecondMappingArgument = Record, Value
 				else
-					RowA, RowB = index, Record
+					FirstMappingArgument, SecondMappingArgument = Index, Record
 				end
 				local Mapped = RunWithOwner(Record, Build)
 				Cache[Key] = Mapped
 				Nodes[Key] = Record
 				Added += 1
-				Out[index] = Mapped
+				Output[Index] = Mapped
 			end
 		end
 
 		RebuildAborted = false
 
-		if MustScan or Seen ~= CacheN + Added then
-			local LiveN = 0
+		if MustScan or Seen ~= CachedItemCount + Added then
+			local LiveItemCount = 0
 			for Key, Record in Nodes do
 				if CurrentKeys[Key] == nil then
 					Record:Destroy()
@@ -344,15 +344,15 @@ const function CreateMapper(List : any, MappingCallback : any, KeyedByValue : bo
 					DisposeResource(Cache[Key])
 					Cache[Key] = nil
 				else
-					LiveN += 1
+					LiveItemCount += 1
 				end
 			end
-			CacheN = LiveN
+			CachedItemCount = LiveItemCount
 		else
-			CacheN += Added
+			CachedItemCount += Added
 		end
 
-		return Out
+		return Output
 	end)
 
 	Self:OnDestroy(function()
@@ -371,7 +371,7 @@ end
 const function MapByIndex<ListType, OutputType>(
 	List : ListType,
 	MappingCallback : (
-		index : number,
+		Index : number,
 		ItemValue : Node<Item<ListType>>
 	) -> OutputType
 ) : Node<{ OutputType }>
@@ -381,7 +381,7 @@ end
 const function MapByValue<ListType, OutputType>(
 	List : ListType,
 	MappingCallback : (
-		index : Node<number>,
+		Index : Node<number>,
 		Value : Item<ListType>
 	) -> OutputType
 ) : Node<{ OutputType }>

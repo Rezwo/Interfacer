@@ -37,7 +37,10 @@ const function IsFinite(Value : number) : boolean
 end
 
 const function Nonnegative(Value : number, Name : string) : number
-	assert(IsFinite(Value) and Value >= 0, `VirtualCollection {Name} must be finite and nonnegative`)
+	assert(
+		IsFinite(Value) and Value >= 0,
+		`VirtualCollection {Name} must be finite and nonnegative`
+	)
 	return Value
 end
 
@@ -46,10 +49,18 @@ const function Catalog<ItemType>(Items : { ItemType }, GetKey : (ItemType) -> Ke
 	local Entries = 0
 	for Index, Item in Items do
 		Entries += 1
-		assert(type(Index) == "number" and Index >= 1 and Index % 1 == 0 and Index <= #Items, "VirtualCollection Items must be a dense array")
+		assert(
+			type(Index) == "number" and Index >= 1 and Index % 1 == 0 and Index <= #Items,
+			"VirtualCollection Items must be a dense array"
+		)
 		local Passed, Key = Synchronous.Run(GetKey, Item)
-		if not Passed then error(Key, 0) end
-		assert(type(Key) == "string" or (type(Key) == "number" and IsFinite(Key)), "VirtualCollection key must be a string or finite number")
+		if not Passed then
+			error(Key, 0)
+		end
+		assert(
+			type(Key) == "string" or (type(Key) == "number" and IsFinite(Key)),
+			"VirtualCollection key must be a string or finite number"
+		)
 		assert(Positions[Key] == nil, "VirtualCollection duplicate key")
 		Values[Index], Keys[Index], Positions[Key] = Item, Key, Index
 	end
@@ -61,7 +72,10 @@ const function Geometry(Width : number, Height : number, Count : number, Layout 
 	Nonnegative(Width, "width")
 	Nonnegative(Height, "height")
 	assert(Layout.Kind == "List" or Layout.Kind == "Grid", "VirtualCollection unknown layout")
-	assert(IsFinite(Layout.ItemHeight) and Layout.ItemHeight > 0, "VirtualCollection ItemHeight must be positive and finite")
+	assert(
+		IsFinite(Layout.ItemHeight) and Layout.ItemHeight > 0,
+		"VirtualCollection ItemHeight must be positive and finite"
+	)
 	local PaddingHorizontal = Nonnegative(Layout.PaddingHorizontal or 0, "horizontal padding")
 	local PaddingVertical = Nonnegative(Layout.PaddingVertical or 0, "vertical padding")
 	local GapHorizontal = Nonnegative(Layout.GapHorizontal or 0, "horizontal gap")
@@ -72,17 +86,29 @@ const function Geometry(Width : number, Height : number, Count : number, Layout 
 	local Columns = 1
 	if Layout.Kind == "Grid" then
 		local Minimum = Layout.MinimumItemWidth
-		assert(Minimum and IsFinite(Minimum) and Minimum > 0, "VirtualCollection MinimumItemWidth must be positive and finite")
-		Columns = math.max(1, math.floor((AvailableWidth + GapHorizontal) / (Minimum + GapHorizontal)))
+		assert(
+			Minimum and IsFinite(Minimum) and Minimum > 0,
+			"VirtualCollection MinimumItemWidth must be positive and finite"
+		)
+		Columns =
+			math.max(1, math.floor((AvailableWidth + GapHorizontal) / (Minimum + GapHorizontal)))
 	end
 	local ItemWidth = math.max(0, (AvailableWidth - (Columns - 1) * GapHorizontal) / Columns)
 	local Rows = math.ceil(Count / Columns)
 	return {
-		Columns = Columns, Count = Count, ItemWidth = ItemWidth, ItemHeight = Layout.ItemHeight,
-		StrideHorizontal = ItemWidth + GapHorizontal, StrideVertical = Layout.ItemHeight + GapVertical,
-		PaddingHorizontal = PaddingHorizontal, PaddingVertical = PaddingVertical,
-		CanvasHeight = PaddingVertical * 2 + Rows * Layout.ItemHeight + math.max(0, Rows - 1) * GapVertical,
-		WindowHeight = Height, OverscanRows = OverscanRows,
+		Columns = Columns,
+		Count = Count,
+		ItemWidth = ItemWidth,
+		ItemHeight = Layout.ItemHeight,
+		StrideHorizontal = ItemWidth + GapHorizontal,
+		StrideVertical = Layout.ItemHeight + GapVertical,
+		PaddingHorizontal = PaddingHorizontal,
+		PaddingVertical = PaddingVertical,
+		CanvasHeight = PaddingVertical * 2
+			+ Rows * Layout.ItemHeight
+			+ math.max(0, Rows - 1) * GapVertical,
+		WindowHeight = Height,
+		OverscanRows = OverscanRows,
 	}
 end
 
@@ -92,11 +118,19 @@ const function Position(Shape : Geometry, Index : number) : (number, number)
 end
 
 const function Window(Shape : Geometry, Offset : number) : (number, number)
-	if Shape.Count == 0 or Shape.WindowHeight <= 0 or Shape.ItemWidth <= 0 then return 1, 0 end
+	if Shape.Count == 0 or Shape.WindowHeight <= 0 or Shape.ItemWidth <= 0 then
+		return 1, 0
+	end
 	local Clamped = math.clamp(Offset, 0, math.max(0, Shape.CanvasHeight - Shape.WindowHeight))
-	local FirstRow = math.max(0, math.floor((Clamped - Shape.PaddingVertical) / Shape.StrideVertical) - Shape.OverscanRows)
-	local LastRow = math.floor((Clamped + Shape.WindowHeight - Shape.PaddingVertical - 0.000001) / Shape.StrideVertical) + Shape.OverscanRows
-	return math.min(Shape.Count, FirstRow * Shape.Columns + 1), math.min(Shape.Count, (LastRow + 1) * Shape.Columns)
+	local FirstRow = math.max(
+		0,
+		math.floor((Clamped - Shape.PaddingVertical) / Shape.StrideVertical) - Shape.OverscanRows
+	)
+	local LastRow = math.floor(
+		(Clamped + Shape.WindowHeight - Shape.PaddingVertical - 0.000001) / Shape.StrideVertical
+	) + Shape.OverscanRows
+	return math.min(Shape.Count, FirstRow * Shape.Columns + 1),
+		math.min(Shape.Count, (LastRow + 1) * Shape.Columns)
 end
 
 const function CaptureAnchor<ItemType>(Values : Catalog<ItemType>, Shape : Geometry, Offset : number) : Anchor
@@ -106,23 +140,41 @@ const function CaptureAnchor<ItemType>(Values : Catalog<ItemType>, Shape : Geome
 	return { Key = Values.Keys[Index], PreviousIndex = Index, Offset = Offset - Top }
 end
 
-const function RestoreAnchor<ItemType>(Anchor : Anchor, Previous : Catalog<ItemType>, Current : Catalog<ItemType>, Shape : Geometry) : number
+const function RestoreAnchor<ItemType>(
+	Anchor : Anchor,
+	Previous : Catalog<ItemType>,
+	Current : Catalog<ItemType>,
+	Shape : Geometry
+) : number
 	local Index = if Anchor.Key ~= nil then Current.Positions[Anchor.Key] else nil
 	if not Index then
 		for Cursor = Anchor.PreviousIndex + 1, #Previous.Keys do
 			Index = Current.Positions[Previous.Keys[Cursor]]
-			if Index then break end
+			if Index then
+				break
+			end
 		end
 	end
 	if not Index then
 		for Cursor = Anchor.PreviousIndex - 1, 1, -1 do
 			Index = Current.Positions[Previous.Keys[Cursor]]
-			if Index then break end
+			if Index then
+				break
+			end
 		end
 	end
-	if not Index then return 0 end
+	if not Index then
+		return 0
+	end
 	local _, Top = Position(Shape, Index)
 	return math.clamp(Top + Anchor.Offset, 0, math.max(0, Shape.CanvasHeight - Shape.WindowHeight))
 end
 
-return table.freeze({ Catalog = Catalog, Geometry = Geometry, Window = Window, Position = Position, CaptureAnchor = CaptureAnchor, RestoreAnchor = RestoreAnchor })
+return table.freeze({
+	Catalog = Catalog,
+	Geometry = Geometry,
+	Window = Window,
+	Position = Position,
+	CaptureAnchor = CaptureAnchor,
+	RestoreAnchor = RestoreAnchor,
+})

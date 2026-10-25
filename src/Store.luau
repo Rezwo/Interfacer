@@ -130,7 +130,7 @@ const function FireTracker(Nodes : { [any] : any }, Target : { [any] : any })
 	end
 end
 
-const function ResyncIndices(
+const function ResynchronizeIndices(
 	Nodes : { [any] : any },
 	Target : { [any] : any },
 	From : number,
@@ -158,11 +158,11 @@ const function ReadTracker(Metadata : StoreMetadata) : { [any] : any }
 	return Target
 end
 
-const function ValidatePos(Position : any, Max : number) : number
+const function ValidatePosition(Position : any, MaximumPosition : number) : number
 	if type(Position) ~= "number" then
 		error(`Position must be a number, got {typeof(Position)}`, 3)
-	elseif Position ~= math.floor(Position) or Position < 1 or Position > Max then
-		error(`Position {Position} out of range [1, {Max}]`, 3)
+	elseif Position ~= math.floor(Position) or Position < 1 or Position > MaximumPosition then
+		error(`Position {Position} out of range [1, {MaximumPosition}]`, 3)
 	end
 	return Position
 end
@@ -187,10 +187,10 @@ function ReadProxyKey(Proxy : any, PropertyKey : any) : any
 	return Value
 end
 
-function WriteProxyKey(Proxy : any, PropertyKey : any, NewVal : any)
+function WriteProxyKey(Proxy : any, PropertyKey : any, NewValue : any)
 	local Metadata : StoreMetadata = getmetatable(Proxy)
 	local Target = Metadata.Target
-	local RawValue = GetRawStoreValue(NewVal)
+	local RawValue = GetRawStoreValue(NewValue)
 	local OldValue = rawget(Target, PropertyKey)
 
 	if OldValue ~= RawValue or type(RawValue) == "table" then
@@ -256,13 +256,13 @@ function Store.Unwrap<ValueType>(Proxy : ValueType) : ValueType
 	return (RawTablesByProxy[Proxy] or Proxy) :: ValueType
 end
 
-function Store.Insert(Proxy : any, PosOrValue : any, Value : any?)
+function Store.Insert(Proxy : any, PositionOrValue : any, Value : any?)
 	local Target = RawTablesByProxy[Proxy]
 	if not Target then
 		if Value == nil then
-			table.insert(Proxy, PosOrValue)
+			table.insert(Proxy, PositionOrValue)
 		else
-			table.insert(Proxy, PosOrValue, Value)
+			table.insert(Proxy, PositionOrValue, Value)
 		end
 		return
 	end
@@ -271,9 +271,9 @@ function Store.Insert(Proxy : any, PosOrValue : any, Value : any?)
 	local CurrentValue : any
 	if Value == nil then
 		Position = #Target + 1
-		CurrentValue = PosOrValue
+		CurrentValue = PositionOrValue
 	else
-		Position = ValidatePos(PosOrValue, #Target + 1)
+		Position = ValidatePosition(PositionOrValue, #Target + 1)
 		CurrentValue = Value
 	end
 
@@ -281,7 +281,7 @@ function Store.Insert(Proxy : any, PosOrValue : any, Value : any?)
 	table.insert(Target, Position, RawValue)
 
 	local Nodes = (getmetatable(Proxy) :: StoreMetadata).Nodes
-	ResyncIndices(Nodes, Target, Position, #Target)
+	ResynchronizeIndices(Nodes, Target, Position, #Target)
 	FireTracker(Nodes, Target)
 end
 
@@ -293,7 +293,7 @@ function Store.Remove(Proxy : any, Position : number?) : any
 
 	local Length = #Target
 	if Position ~= nil then
-		ValidatePos(Position, Length)
+		ValidatePosition(Position, Length)
 	end
 	if Length == 0 then
 		return nil
@@ -305,7 +305,7 @@ function Store.Remove(Proxy : any, Position : number?) : any
 	TeardownDisplaced(Target, Removed)
 
 	local Nodes = (getmetatable(Proxy) :: StoreMetadata).Nodes
-	ResyncIndices(Nodes, Target, Index, Length - 1)
+	ResynchronizeIndices(Nodes, Target, Index, Length - 1)
 	local TailNode = Nodes[Length]
 	if TailNode then
 		SetNodeValue(TailNode, nil)
@@ -323,8 +323,8 @@ function Store.Move(Proxy : any, From : number, Destination : number)
 	end
 
 	local Length = #Target
-	ValidatePos(From, Length)
-	ValidatePos(Destination, Length)
+	ValidatePosition(From, Length)
+	ValidatePosition(Destination, Length)
 	if From == Destination then
 		return
 	end
@@ -332,7 +332,7 @@ function Store.Move(Proxy : any, From : number, Destination : number)
 	table.insert(Target, Destination, table.remove(Target, From))
 
 	local Nodes = (getmetatable(Proxy) :: StoreMetadata).Nodes
-	ResyncIndices(Nodes, Target, math.min(From, Destination), math.max(From, Destination))
+	ResynchronizeIndices(Nodes, Target, math.min(From, Destination), math.max(From, Destination))
 	FireTracker(Nodes, Target)
 end
 
@@ -340,10 +340,10 @@ const function IsArrayLike(ValueOrStorage : { [any] : any }) : boolean
 	return rawget(ValueOrStorage, 1) ~= nil
 end
 
-const function IsArrayIndex(PropertyKey : any, ArrayLen : number) : boolean
+const function IsArrayIndex(PropertyKey : any, ArrayLength : number) : boolean
 	return type(PropertyKey) == "number"
 		and PropertyKey >= 1
-		and PropertyKey <= ArrayLen
+		and PropertyKey <= ArrayLength
 		and PropertyKey == math.floor(PropertyKey)
 end
 
@@ -369,29 +369,29 @@ const function ReconcileLeaf(
 	Target : { [any] : any },
 	Nodes : { [any] : any },
 	PropertyKey : any,
-	RawNew : any,
+	NewRawValue : any,
 	ReconcileKey : string?
 ) : boolean
 	local OldValue = rawget(Target, PropertyKey)
-	if OldValue == RawNew then
+	if OldValue == NewRawValue then
 		return false
 	end
-	if type(OldValue) == "table" and type(RawNew) == "table" then
+	if type(OldValue) == "table" and type(NewRawValue) == "table" then
 		local OldProxy = ProxiesByRawTable[OldValue]
 		if OldProxy ~= nil then
-			ReconcileTable(OldProxy, OldValue, RawNew, ReconcileKey)
+			ReconcileTable(OldProxy, OldValue, NewRawValue, ReconcileKey)
 		else
-			SynchronizeRawValue(OldValue, RawNew)
+			SynchronizeRawValue(OldValue, NewRawValue)
 		end
 		return false
 	end
-	rawset(Target, PropertyKey, RawNew)
+	rawset(Target, PropertyKey, NewRawValue)
 	if type(OldValue) == "table" then
 		TeardownDisplaced(Target, OldValue)
 	end
 	local Record = Nodes[PropertyKey]
 	if Record ~= nil then
-		SetNodeValue(Record, RawNew)
+		SetNodeValue(Record, NewRawValue)
 	end
 	return true
 end
@@ -401,9 +401,9 @@ const function ReconcileArray(
 	NewData : { [any] : any },
 	Nodes : { [any] : any }
 ) : (number, boolean)
-	local OldLen = #Target
-	local NewLen = #NewData
-	local Span = if OldLen > NewLen then OldLen else NewLen
+	local OldLength = #Target
+	local NewLength = #NewData
+	local Span = if OldLength > NewLength then OldLength else NewLength
 	local Structural = false
 
 	for Index = 1, Span do
@@ -425,19 +425,19 @@ const function ReconcileArrayKeyed(
 	Nodes : { [any] : any },
 	ReconcileKey : string
 ) : (number, boolean)
-	local OldLen = #Target
-	local NewLen = #NewData
-	local Span = if OldLen > NewLen then OldLen else NewLen
+	local OldLength = #Target
+	local NewLength = #NewData
+	local Span = if OldLength > NewLength then OldLength else NewLength
 	local Structural = false
 
-	local OldElems = table.create(OldLen)
+	local OldElements = table.create(OldLength)
 	local OldByKey : { [any] : any } = {}
-	for Index = 1, OldLen do
+	for Index = 1, OldLength do
 		local Element = rawget(Target, Index)
 		if Element == nil then
 			continue
 		end
-		OldElems[Index] = Element
+		OldElements[Index] = Element
 		if type(Element) == "table" then
 			local Key = rawget(Element, ReconcileKey)
 			if Key ~= nil then
@@ -449,11 +449,11 @@ const function ReconcileArrayKeyed(
 	local Matched : { [any] : boolean } = {}
 	local SeenKeys : { [any] : boolean } = {}
 	for Index = 1, Span do
-		local RawNew = GetRawStoreValue(rawget(NewData, Index))
+		local NewRawValue = GetRawStoreValue(rawget(NewData, Index))
 
-		local Placed = RawNew
-		if type(RawNew) == "table" then
-			local Key = rawget(RawNew, ReconcileKey)
+		local Placed = NewRawValue
+		if type(NewRawValue) == "table" then
+			local Key = rawget(NewRawValue, ReconcileKey)
 			local Reuse
 			if Key ~= nil then
 				if SeenKeys[Key] then
@@ -465,7 +465,7 @@ const function ReconcileArrayKeyed(
 				end
 				Reuse = OldByKey[Key]
 			else
-				local PreviousValue : any = OldElems[Index]
+				local PreviousValue : any = OldElements[Index]
 				if
 					type(PreviousValue) == "table"
 					and rawget(PreviousValue, ReconcileKey) == nil
@@ -477,9 +477,9 @@ const function ReconcileArrayKeyed(
 				Matched[Reuse] = true
 				local ChildProxy = ProxiesByRawTable[Reuse]
 				if ChildProxy ~= nil then
-					ReconcileTable(ChildProxy, Reuse, RawNew, ReconcileKey)
+					ReconcileTable(ChildProxy, Reuse, NewRawValue, ReconcileKey)
 				else
-					SynchronizeRawValue(Reuse, RawNew)
+					SynchronizeRawValue(Reuse, NewRawValue)
 				end
 				Placed = Reuse
 			end
@@ -495,8 +495,8 @@ const function ReconcileArrayKeyed(
 		end
 	end
 
-	for Index = 1, OldLen do
-		local Element = OldElems[Index]
+	for Index = 1, OldLength do
+		local Element = OldElements[Index]
 		if type(Element) == "table" and not Matched[Element] then
 			TeardownDisplaced(Target, Element)
 		end
@@ -514,30 +514,30 @@ function ReconcileTable(
 	local Nodes = (getmetatable(Proxy) :: StoreMetadata).Nodes
 	local Structural = false
 
-	local ArrayLen = 0
+	local ArrayLength = 0
 	if IsArrayLike(Target) or IsArrayLike(NewData) then
 		if ReconcileKey ~= nil then
-			ArrayLen, Structural = ReconcileArrayKeyed(Target, NewData, Nodes, ReconcileKey)
+			ArrayLength, Structural = ReconcileArrayKeyed(Target, NewData, Nodes, ReconcileKey)
 		else
-			ArrayLen, Structural = ReconcileArray(Target, NewData, Nodes)
+			ArrayLength, Structural = ReconcileArray(Target, NewData, Nodes)
 		end
 	end
 
-	for PropertyKey, NewVal in NewData do
-		if IsArrayIndex(PropertyKey, ArrayLen) then
+	for PropertyKey, NewValue in NewData do
+		if IsArrayIndex(PropertyKey, ArrayLength) then
 			continue
 		end
 		Structural = ReconcileLeaf(
 			Target,
 			Nodes,
 			PropertyKey,
-			GetRawStoreValue(NewVal),
+			GetRawStoreValue(NewValue),
 			ReconcileKey
 		) or Structural
 	end
 
 	for PropertyKey in Target do
-		if IsArrayIndex(PropertyKey, ArrayLen) then
+		if IsArrayIndex(PropertyKey, ArrayLength) then
 			continue
 		end
 		if rawget(NewData, PropertyKey) == nil then
@@ -556,8 +556,8 @@ function Store.Reconcile<ValueType>(Proxy : ValueType, NewData : ValueType, Prop
 	assert(Target ~= nil, "Store.reconcile expects a store proxy")
 	assert(type(NewData) == "table", "Store.reconcile newData must be a table")
 
-	local RawNew = GetRawStoreValue(NewData)
-	ReconcileTable(Proxy, Target, RawNew :: any, PropertyKey)
+	local NewRawValue = GetRawStoreValue(NewData)
+	ReconcileTable(Proxy, Target, NewRawValue :: any, PropertyKey)
 	return Proxy
 end
 
