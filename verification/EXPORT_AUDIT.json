@@ -1,0 +1,24 @@
+{
+  "scope": "explicit clean public-export files; new history only",
+  "file_count": 69,
+  "rules": [
+    "github_token",
+    "private_key",
+    "roblox_session_cookie",
+    "aws_access_key",
+    "credential_assignment",
+    "machine_or_archive_path",
+    "personal_email"
+  ],
+  "findings": [],
+  "excluded": [
+    "private archive",
+    "private Git history",
+    "machine-local logs",
+    "game fixtures",
+    "examples",
+    "raw third-party artwork",
+    "tool binaries",
+    "credentials"
+  ]
+}

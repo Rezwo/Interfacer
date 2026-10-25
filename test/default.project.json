@@ -1,0 +1,21 @@
+{
+	"name": "Test Flux",
+	"emitLegacyScripts": false,
+	"tree": {
+		"$className": "DataModel",
+		"ReplicatedStorage": {
+			"Flux": {
+				"$path": "../src"
+			},
+			"sert": {
+				"$path": "sert.luau"
+			},
+			"Flux.spec": {
+				"$path": "spec.client.luau"
+			},
+			"Flux.unit": {
+				"$path": "unit"
+			}
+		}
+	}
+}

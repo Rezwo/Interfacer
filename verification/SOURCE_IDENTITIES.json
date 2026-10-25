@@ -1,0 +1,31 @@
+{
+  "sha256": {
+    "src/Asynchronous.luau": "2b9a279c1a4464a4fb918408c660d2efbce6e7dce3dcd997532d4d439ad3d9ca",
+    "src/Bind.luau": "dcd8926208ca68277c25c96ac92e2862e90edf39ab4d6c87ebfdb6cf3d453628",
+    "src/Clock.luau": "b43f527f81dd4d39f01f2213d62b42e3e0a9acc8656a8bf6f08af225f3a08276",
+    "src/Compatibility.luau": "fe1f1461412d2876c58e5f9c0493df964891d77b8fa67d5933044a30d591fcec",
+    "src/Conditional.luau": "022d544a847c53a86e4f997eae6339d92a4f2c0a605bc0552da91af045ef2eed",
+    "src/Dialog.luau": "e94350e68176721611d3e85122cc43437b8892042823448ae041634c61c0c8b9",
+    "src/Edit.luau": "0ff55abb44988cc01759ddd16eec59251bba9c339c198906b61de32e600e40df",
+    "src/ExitVisual.luau": "0fe5e1c8056a14470a65dbd7667bfecbc667b2b4c74f2e025afffa7d9c4f3701",
+    "src/Graph.luau": "f1746cdffabc7e809bc510de9525dc205e0c82321f57e283dda254e4ff604ec8",
+    "src/init.luau": "b6f018056ee53de506bfae26a8d2f9a2313fe11501acffaf1b804d18df837b34",
+    "src/Interact.luau": "06de1d87e0fb4d95c088dec64d5a10250f279988fbe80766b38b4b773f3df62c",
+    "src/Layout.luau": "69c8f8e0091320b76726679f09c2c6d3066bbb96e7285c20250736c7c07b33c2",
+    "src/Motion.luau": "47c5532eaa67fd1a48200e6e3ead8d7aef72f2e0dfe7773d6a2713763c35edad",
+    "src/Overlay.luau": "94805c2c4dc3b6324a077c6c6df18d6f8af07ddacfeb4e479047f4e199ed7f02",
+    "src/PresentationSnapshots.luau": "cea096a5e6ec78aaee03f4b6ce2292f0eecd8caf69cb29c69866c96dd404298b",
+    "src/PresentationSurface.luau": "2fce87178b91545d5860e220cdc930cdefe53dddb4c02485851499f38c9aabc3",
+    "src/Responsive.luau": "8a4c4f5a8846254c2c0e89968ac51a1b394bfaeaecb038bd99e27c6ac3f2f853",
+    "src/ReusableCellPool.luau": "6c614d715e90c4bacb0b11c804865cc4077ca0aa1cf4170a82f287aef6e2dccf",
+    "src/ReusableVirtualCollection.luau": "ee39502da390803531634f5681596a24b6925f0718ce61da4a396eff46a675f1",
+    "src/ReusableWindow.luau": "4620dfa4d95d82729cec546a24368cf66c069a703b146729faaeec6add773943",
+    "src/Store.luau": "f3afc83c5ba7cac1d87305f28fd3e7c4395347eb934962771c35e65e11107b83",
+    "src/TransactionalNative.luau": "06697b5a43e464221551d11f4e77847bffc31198b083036b912631be9f2adf76",
+    "src/VirtualCollection.luau": "3363d9d94774ad48668c494b6982daadcfeaa48211e05bb8950025fc1c86f4e4",
+    "src/VirtualGeometry.luau": "e1c2d4368ca9e1ae61df2a3e07f61f1ae5f454312d7feeeb4a64ca8213ce2c36",
+    "src/VirtualSynchronous.luau": "f139b35a981a4a9d8c00caaff618986cbdc99b4eee964688d9c35c6ddbeaaf3c",
+    "src/Type/init.luau": "f53abf1dca0d328310f436b1c61745a09f3a9db2f9e5f4e6e684c70aeefc46e9",
+    "src/Type/Instances.luau": "aacf79e75769b4c59c35f86f75ba9cc424bb17a7ae81aa85cc968eb2c924d4c1"
+  }
+}

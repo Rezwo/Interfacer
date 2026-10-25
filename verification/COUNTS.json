@@ -1,0 +1,11 @@
+{
+  "command": [
+    "luau",
+    "-O2",
+    "verification/CoreCounts.luau"
+  ],
+  "stdout": "COUNTS\t3\tInitial\t3\t3\t3\nCOUNTS\t3\tChanged\t3\t3\t3\nCOUNTS\t3\tEqual\t3\t0\t0\nCOUNTS\t500\tInitial\t500\t500\t500\nCOUNTS\t500\tChanged\t500\t500\t500\nCOUNTS\t500\tEqual\t500\t0\t0\nCOUNTS\t5000\tInitial\t5000\t5000\t5000\nCOUNTS\t5000\tChanged\t5000\t5000\t5000\nCOUNTS\t5000\tEqual\t5000\t0\t0\nCOUNTS PASS: 9 phase/size rows; assertions enabled; no timing acquisition\n",
+  "stderr": "",
+  "exit_status": 0,
+  "cli_sha256": "2cab978f10cb8f1b4a77c8108c7d27b0503d4196bbfa0ace459b9b55ee19e09c"
+}
