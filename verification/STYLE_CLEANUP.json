@@ -1,0 +1,201 @@
+{
+  "baseline_commit": "e938643a5851101fe882e52f908a8289f72fabe9",
+  "renames": {
+    "src/Dialog.luau": {
+      "renames": {},
+      "expanded_blocks": true
+    },
+    "src/Edit.luau": {
+      "renames": {},
+      "expanded_blocks": true
+    },
+    "src/ExitVisual.luau": {
+      "renames": {},
+      "expanded_blocks": true
+    },
+    "src/Overlay.luau": {
+      "renames": {},
+      "expanded_blocks": true
+    },
+    "src/PresentationSurface.luau": {
+      "renames": {},
+      "expanded_blocks": true
+    },
+    "src/ReusableCellPool.luau": {
+      "renames": {},
+      "expanded_blocks": true
+    },
+    "src/ReusableVirtualCollection.luau": {
+      "renames": {},
+      "expanded_blocks": true
+    },
+    "src/ReusableWindow.luau": {
+      "renames": {},
+      "expanded_blocks": true
+    },
+    "src/Store.luau": {
+      "renames": {
+        "OldLen": "OldLength",
+        "NewLen": "NewLength",
+        "ArrayLen": "ArrayLength",
+        "OldElems": "OldElements",
+        "NewVal": "NewValue",
+        "ValidatePos": "ValidatePosition",
+        "PosOrValue": "PositionOrValue",
+        "Max": "MaximumPosition",
+        "RawNew": "NewRawValue",
+        "ResyncIndices": "ResynchronizeIndices"
+      },
+      "expanded_blocks": false
+    },
+    "src/TransactionalNative.luau": {
+      "renames": {},
+      "expanded_blocks": true
+    },
+    "src/VirtualCollection.luau": {
+      "renames": {},
+      "expanded_blocks": true
+    },
+    "src/VirtualGeometry.luau": {
+      "renames": {},
+      "expanded_blocks": true
+    },
+    "src/Asynchronous.luau": {
+      "renames": {
+        "CurrentId": "CurrentIdentifier",
+        "NextId": "NextIdentifier"
+      }
+    },
+    "src/Conditional.luau": {
+      "renames": {
+        "Out": "Output",
+        "CacheN": "CachedItemCount",
+        "LiveN": "LiveItemCount",
+        "RowA": "FirstMappingArgument",
+        "RowB": "SecondMappingArgument",
+        "index (runtime parameters only)": "Index"
+      }
+    }
+  },
+  "instructions": [
+    {
+      "path": "src/Asynchronous.luau",
+      "instruction_disassembly_identical": true
+    },
+    {
+      "path": "src/Bind.luau",
+      "instruction_disassembly_identical": true
+    },
+    {
+      "path": "src/Clock.luau",
+      "instruction_disassembly_identical": true
+    },
+    {
+      "path": "src/Compatibility.luau",
+      "instruction_disassembly_identical": true
+    },
+    {
+      "path": "src/Conditional.luau",
+      "instruction_disassembly_identical": true
+    },
+    {
+      "path": "src/Dialog.luau",
+      "instruction_disassembly_identical": true
+    },
+    {
+      "path": "src/Edit.luau",
+      "instruction_disassembly_identical": true
+    },
+    {
+      "path": "src/ExitVisual.luau",
+      "instruction_disassembly_identical": true
+    },
+    {
+      "path": "src/Graph.luau",
+      "instruction_disassembly_identical": true
+    },
+    {
+      "path": "src/init.luau",
+      "instruction_disassembly_identical": true
+    },
+    {
+      "path": "src/Interact.luau",
+      "instruction_disassembly_identical": true
+    },
+    {
+      "path": "src/Layout.luau",
+      "instruction_disassembly_identical": true
+    },
+    {
+      "path": "src/Motion.luau",
+      "instruction_disassembly_identical": true
+    },
+    {
+      "path": "src/Overlay.luau",
+      "instruction_disassembly_identical": true
+    },
+    {
+      "path": "src/PresentationSnapshots.luau",
+      "instruction_disassembly_identical": true
+    },
+    {
+      "path": "src/PresentationSurface.luau",
+      "instruction_disassembly_identical": true
+    },
+    {
+      "path": "src/Responsive.luau",
+      "instruction_disassembly_identical": true
+    },
+    {
+      "path": "src/ReusableCellPool.luau",
+      "instruction_disassembly_identical": true
+    },
+    {
+      "path": "src/ReusableVirtualCollection.luau",
+      "instruction_disassembly_identical": true
+    },
+    {
+      "path": "src/ReusableWindow.luau",
+      "instruction_disassembly_identical": true
+    },
+    {
+      "path": "src/Store.luau",
+      "instruction_disassembly_identical": true
+    },
+    {
+      "path": "src/TransactionalNative.luau",
+      "instruction_disassembly_identical": true
+    },
+    {
+      "path": "src/VirtualCollection.luau",
+      "instruction_disassembly_identical": true
+    },
+    {
+      "path": "src/VirtualGeometry.luau",
+      "instruction_disassembly_identical": true
+    },
+    {
+      "path": "src/VirtualSynchronous.luau",
+      "instruction_disassembly_identical": true
+    },
+    {
+      "path": "src/Type/init.luau",
+      "instruction_disassembly_identical": true
+    },
+    {
+      "path": "src/Type/Instances.luau",
+      "instruction_disassembly_identical": true
+    }
+  ],
+  "headless": {
+    "passed": 253,
+    "failed": 0,
+    "skipped": 78
+  },
+  "counts": "9 phase/size rows passed at 3, 500, 5000",
+  "analyzer": "SolverV2 source analysis exited 0",
+  "native": "Not rerun for this mechanical cleanup",
+  "review": "Code review: skipped (mechanical diff); private binding renames and formatting only. Optimized instruction disassemblies identical for all 27 modules.",
+  "raw_binary": "17/27 identical at -O2 -g0; differing serialized metadata is not instruction equality",
+  "advisory_audit": "luaudit exit 1: Selene does not recognize type-function globals (types); StyLua defaults differ from spaced annotation style. Full diagnostics retained locally. These are not labeled a clean lint pass."
+}

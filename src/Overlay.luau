@@ -50,12 +50,20 @@ const function MountPortal(
 ) : Portal
 	assert(Graph.GetOwner() ~= nil, "Portal requires a declaring reactive owner")
 	assert(Host:IsA("GuiObject") or Host:IsA("LayerCollector"), "Portal requires a GUI host")
-	local Data : PortalData = { Root = nil, Owner = nil, Closed = false, Connections = {}, OnClosed = OnClosed }
+	local Data : PortalData =
+		{ Root = nil, Owner = nil, Closed = false, Connections = {}, OnClosed = OnClosed }
 	local Handle = setmetatable(Data, PortalMetatable)
 	local Passed, Owner = pcall(function()
 		return Graph.Scope(function()
-			Graph.Cleanup(function() DestroyPortal(Data) end)
-			table.insert(Data.Connections, Host.Destroying:Connect(function() DestroyPortal(Data) end))
+			Graph.Cleanup(function()
+				DestroyPortal(Data)
+			end)
+			table.insert(
+				Data.Connections,
+				Host.Destroying:Connect(function()
+					DestroyPortal(Data)
+				end)
+			)
 			local Root = Edit.New("Frame", {
 				Name = "InterfacerPortal",
 				Size = UDim2.fromScale(1, 1),
@@ -63,7 +71,12 @@ const function MountPortal(
 				BorderSizePixel = 0,
 			}) :: Frame
 			Data.Root = Root
-			table.insert(Data.Connections, Root.Destroying:Connect(function() DestroyPortal(Data) end))
+			table.insert(
+				Data.Connections,
+				Root.Destroying:Connect(function()
+					DestroyPortal(Data)
+				end)
+			)
 			Render(Root)
 			if Cancellation and Cancellation.Closed then
 				DestroyPortal(Data)
@@ -134,7 +147,9 @@ const function CanSelect(Target : GuiObject?) : boolean
 		elseif Ancestor:IsA("PlayerGui") then
 			return true
 		end
-		if Ancestor:IsA("ScreenGui") or (Ancestor:IsA("GuiObject") and Ancestor.ClipsDescendants) then
+		if
+			Ancestor:IsA("ScreenGui") or (Ancestor:IsA("GuiObject") and Ancestor.ClipsDescendants)
+		then
 			local BoundaryPosition, BoundarySize = Ancestor.AbsolutePosition, Ancestor.AbsoluteSize
 			MinimumHorizontal = math.max(MinimumHorizontal, BoundaryPosition.X)
 			MinimumVertical = math.max(MinimumVertical, BoundaryPosition.Y)
@@ -168,7 +183,11 @@ const function FindFocus(Entry : ModalEntry) : GuiObject?
 	end
 	local Best : GuiObject? = nil
 	for _, Child in Root:GetDescendants() do
-		if Child:IsA("GuiObject") and CanSelect(Child) and (not Best or Child.SelectionOrder < Best.SelectionOrder) then
+		if
+			Child:IsA("GuiObject")
+			and CanSelect(Child)
+			and (not Best or Child.SelectionOrder < Best.SelectionOrder)
+		then
 			Best = Child
 		end
 	end
@@ -213,7 +232,8 @@ end
 const function RemoveEntry(Entry : ModalEntry)
 	local Stack = Entry.Stack
 	Entry.Closed = true
-	Entry.Stack, Entry.Portal, Entry.Root, Entry.InitialFocus, Entry.LastFocus = nil, nil, nil, nil, nil
+	Entry.Stack, Entry.Portal, Entry.Root, Entry.InitialFocus, Entry.LastFocus =
+		nil, nil, nil, nil, nil
 	if not Stack then
 		return
 	end
@@ -245,7 +265,10 @@ const function CloseEntry(Entry : ModalEntry)
 	end
 end
 
-const function OpenModal(Self : StackData, Render : (Layer : Frame, Close : () -> ()) -> GuiObject?) : Modal
+const function OpenModal(
+	Self : StackData,
+	Render : (Layer : Frame, Close : () -> ()) -> GuiObject?
+) : Modal
 	assert(not Self.Closed, "ModalStack is destroyed")
 	assert(Graph.GetOwner() ~= nil, "Modal requires a declaring reactive owner")
 	local Host, Service = Self.Host, Self.GuiService
@@ -253,7 +276,14 @@ const function OpenModal(Self : StackData, Render : (Layer : Frame, Close : () -
 	if #Self.Entries == 0 then
 		Self.OriginalFocus = Service.SelectedObject
 	end
-	local Entry : ModalEntry = { Stack = Self, Portal = nil, Root = nil, InitialFocus = nil, LastFocus = nil, Closed = false }
+	local Entry : ModalEntry = {
+		Stack = Self,
+		Portal = nil,
+		Root = nil,
+		InitialFocus = nil,
+		LastFocus = nil,
+		Closed = false,
+	}
 	table.insert(Self.Entries, Entry)
 	local Passed, Handle = pcall(function()
 		return MountPortal(Host, function(Root)
@@ -262,12 +292,20 @@ const function OpenModal(Self : StackData, Render : (Layer : Frame, Close : () -
 			Root.BackgroundColor3 = Color3.new()
 			Root.BackgroundTransparency = 0.35
 			Root.Active, Root.Selectable, Root.SelectionGroup = true, true, true
-			Root.SelectionBehaviorUp, Root.SelectionBehaviorDown = Enum.SelectionBehavior.Stop, Enum.SelectionBehavior.Stop
-			Root.SelectionBehaviorLeft, Root.SelectionBehaviorRight = Enum.SelectionBehavior.Stop, Enum.SelectionBehavior.Stop
+			Root.SelectionBehaviorUp, Root.SelectionBehaviorDown =
+				Enum.SelectionBehavior.Stop, Enum.SelectionBehavior.Stop
+			Root.SelectionBehaviorLeft, Root.SelectionBehaviorRight =
+				Enum.SelectionBehavior.Stop, Enum.SelectionBehavior.Stop
 			Root.ZIndex = #Self.Entries
-			Graph.Cleanup(Root.DescendantRemoving:Connect(function() task.defer(RefreshFocus, Self) end))
-			Entry.InitialFocus = Render(Root, function() CloseEntry(Entry) end)
-		end, function() RemoveEntry(Entry) end, Entry)
+			Graph.Cleanup(Root.DescendantRemoving:Connect(function()
+				task.defer(RefreshFocus, Self)
+			end))
+			Entry.InitialFocus = Render(Root, function()
+				CloseEntry(Entry)
+			end)
+		end, function()
+			RemoveEntry(Entry)
+		end, Entry)
 	end)
 	if not Passed then
 		RemoveEntry(Entry)
@@ -320,38 +358,73 @@ const function DestroyStack(Self : StackData)
 	Self.Host, Self.GuiService = nil, nil
 end
 
-const StackMethods = table.freeze({ Open = OpenModal, CloseTop = CloseTop, GetCount = GetCount, GetTop = GetTop, Destroy = DestroyStack })
+const StackMethods = table.freeze({
+	Open = OpenModal,
+	CloseTop = CloseTop,
+	GetCount = GetCount,
+	GetTop = GetTop,
+	Destroy = DestroyStack,
+})
 const StackMetatable = table.freeze({ __index = StackMethods })
 export type ModalStack = typeof(setmetatable({} :: StackData, StackMetatable))
 
 const function CreateModalStack(Host : ScreenGui) : ModalStack
 	assert(Graph.GetOwner() ~= nil, "ModalStack requires a declaring reactive owner")
 	assert(game:GetService("RunService"):IsClient(), "ModalStack is client-only")
-	assert(Host.ZIndexBehavior == Enum.ZIndexBehavior.Sibling, "ModalStack requires sibling ZIndex behavior")
+	assert(
+		Host.ZIndexBehavior == Enum.ZIndexBehavior.Sibling,
+		"ModalStack requires sibling ZIndex behavior"
+	)
 	local Player = game:GetService("Players").LocalPlayer
 	local PlayerGui = if Player then Player:FindFirstChildOfClass("PlayerGui") else nil
-	assert(PlayerGui and Host:IsDescendantOf(PlayerGui), "ModalStack requires a live local PlayerGui host")
+	assert(
+		PlayerGui and Host:IsDescendantOf(PlayerGui),
+		"ModalStack requires a live local PlayerGui host"
+	)
 	assert(ActiveStack == nil, "one active ModalStack is supported per import")
 	local Self : StackData = {
-		Host = Host, Entries = {}, OriginalFocus = nil,
-		GuiService = game:GetService("GuiService"), Connections = {}, Closed = false, ChangingFocus = false,
+		Host = Host,
+		Entries = {},
+		OriginalFocus = nil,
+		GuiService = game:GetService("GuiService"),
+		Connections = {},
+		Closed = false,
+		ChangingFocus = false,
 	}
 	ActiveStack = Self
 	local Handle = setmetatable(Self, StackMetatable)
-	Graph.Cleanup(function() DestroyStack(Self) end)
-	table.insert(Self.Connections, Host.Destroying:Connect(function() DestroyStack(Self) end))
+	Graph.Cleanup(function()
+		DestroyStack(Self)
+	end)
+	table.insert(
+		Self.Connections,
+		Host.Destroying:Connect(function()
+			DestroyStack(Self)
+		end)
+	)
 	local Service = Self.GuiService
 	assert(Service, "GuiService required")
-	table.insert(Self.Connections, Service:GetPropertyChangedSignal("SelectedObject"):Connect(function() RefreshFocus(Self) end))
+	table.insert(
+		Self.Connections,
+		Service:GetPropertyChangedSignal("SelectedObject"):Connect(function()
+			RefreshFocus(Self)
+		end)
+	)
 	return Handle
 end
 
 const function AllowsSelection(Target : GuiObject) : boolean
-	if not CanSelect(Target) then return false end
+	if not CanSelect(Target) then
+		return false
+	end
 	local Stack = ActiveStack
 	local Entry = if Stack then Stack.Entries[#Stack.Entries] else nil
 	local Root = if Entry then Entry.Root else nil
 	return Root == nil or Target == Root or Target:IsDescendantOf(Root)
 end
 
-return table.freeze({ Portal = CreatePortal, ModalStack = CreateModalStack, AllowsSelection = AllowsSelection })
+return table.freeze({
+	Portal = CreatePortal,
+	ModalStack = CreateModalStack,
+	AllowsSelection = AllowsSelection,
+})
