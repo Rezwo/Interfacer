@@ -295,8 +295,6 @@ test("motion Â· tween reactive TweenInfo, DelayTime, and easing styles", funct
 	goal:Set(100)
 	flush()
 
-	local rawTween = MotionModule.NodeToMotion[tw] :: any
-	MotionModule.Engine.SetupTween(rawTween, info:Peek())
 	advance(0.1)
 	expect(approx(tw(), 0), "tween waits during DelayTime")
 	advance(0.3)

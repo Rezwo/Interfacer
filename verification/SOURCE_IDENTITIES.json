@@ -2,7 +2,7 @@
   "sha256": {
     "src/Asynchronous.luau": "3ac89f0e55a5f2fb4566422c689b8da5170b9e8fd5cc1ed89527bf94aaea2891",
     "src/Bind.luau": "5202138ad135c5c59394a0858e72e473b5d8accaa4a2d02af3b1f96e43203161",
-    "src/Clock.luau": "b43f527f81dd4d39f01f2213d62b42e3e0a9acc8656a8bf6f08af225f3a08276",
+    "src/Clock.luau": "770abc14b3461520791048ea3e204d2c22c81eac5653e0f663490f9299fa8622",
     "src/Compatibility.luau": "fe1f1461412d2876c58e5f9c0493df964891d77b8fa67d5933044a30d591fcec",
     "src/Conditional.luau": "77cccc69b35ff6bcde51a8f37e6feebebf5a3826d60438202cb0a0a4e0cc9dfe",
     "src/Dialog.luau": "7b5e226f1e48fd966b5d54220b2f37200f45e75b5be285315b9a3c4267641a30",
@@ -11,7 +11,7 @@
     "src/Graph.luau": "f1746cdffabc7e809bc510de9525dc205e0c82321f57e283dda254e4ff604ec8",
     "src/Interact.luau": "06de1d87e0fb4d95c088dec64d5a10250f279988fbe80766b38b4b773f3df62c",
     "src/Layout.luau": "3ce636c1e1d5ff5bb49099c72acf6873d979510215ee645cde5be67f90377bfc",
-    "src/Motion.luau": "a39ce93a80a7c8a5676cc39af7f4c1db8ee040104b5ea1d00b618ec41bc041d9",
+    "src/Motion.luau": "12d5db875faf6aec88c28e9563bfcac9fb1976dc0f705add70f6ea23954891cd",
     "src/Overlay.luau": "8acfa1d0b0e95c029890761b2d4a0b6d5a3e39f6c15c28140fe3ae7e3a40c5e7",
     "src/PresentationSnapshots.luau": "cea096a5e6ec78aaee03f4b6ce2292f0eecd8caf69cb29c69866c96dd404298b",
     "src/PresentationSurface.luau": "3c207e5859255c5033111076ce06b66854d7b412e839def6432ebed998218f5e",

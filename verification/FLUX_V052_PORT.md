@@ -8,9 +8,10 @@ Source: [Flux v0.5.2](https://github.com/kohltastrophe/flux/tree/1a2ae9a332cef3f
 | Bindings | Adapted FromSignal and Listen on the current graph. The follow-up releases the shared effect after its final property or child binding disconnects; Typed On handles scalar, getter, and array sources; further binding changes remain pending. |
 | Construction | Adapted the live, right-biased Merge property view. The follow-up adapts scoped Mount to the existing native child-binding path, including static and reactive targets. Prop and Own now supply scoped component prop defaults through Split. Other construction/portal deltas remain pending. |
 | Async | Adapted pre-flush deduplication and isolated fetch launch from caller ownership and dependency tracking. |
-| Layout and motion | Adapted Layout.Scale, Flex ratios/configuration and tween Snap. Native layout verification and the remaining motion changes are pending. |
+| Layout and motion | Adapted Layout.Scale, Flex ratios/configuration and tween Snap. The clock/motion follow-up restores delay for resting tweens and exact settlement at rounded completion boundaries. Mid-flight retarget still skips the delay. Other motion and layout changes remain pending. |
 | Store | Adapted multi-parent proxy ownership, cyclic reconcile, safe orphan teardown, NaN keyed matching, and frozen table handling. Registered cleanup already took precedence over a Destroy data key. |
-| Clock, input and responsive | No port in this checkpoint. |
+| Clock | Manual rescheduling replaces stale queue entries for the same thread. Newly scheduled timers wait until the next frame without blocking older eligible deadlines. Other upstream clock hardening remains pending. |
+| Input and responsive | No port in this checkpoint. |
 | Graph | Unchanged. The existing evaluator passed a primed 5,000-node chain probe; that is not an unbounded-depth claim. Upstream evaluator integration, computed callback typing, Safe reset and the comparative performance gate are pending. |
 | Overlays, exits, virtualization and examples | Unchanged; native and example validation pending. Sync is out of scope. |
 
@@ -27,3 +28,7 @@ Use Prop() to claim a key or Prop(Value) for a default; Own combines schema tabl
 ## Store and async follow-up
 
 Shared store proxies linked by reads or writes remain reactive when another linked parent drops them. Losing the last reachable parent releases proxy cycles, and reconcile guards against revisiting cyclic backing tables. Async launch uses the existing owner and tracking controls without replacing the evaluator. The focused replays are included in distribution verification.
+
+## Clock and motion follow-up
+
+The manual-clock replay reproduced four failures: stale reschedules, blocked eligible timers, skipped tween delay from rest, and a stalled tween at its rounded completion boundary. Cancellation/FIFO and spring momentum on retarget already worked and remain covered. The inherited reactive tween delay test now checks public behavior without manually resetting the internal tween.

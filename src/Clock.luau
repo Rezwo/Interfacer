@@ -117,12 +117,28 @@ const function ToThread(FunctionOrThread : any) : thread
 		else coroutine.create(FunctionOrThread)
 end
 
+const function RemoveScheduledEntries(CoroutineThread : thread)
+	local TimerRecord = TimersByThread[CoroutineThread]
+	if TimerRecord then
+		TimerRecord.Cancelled = true
+		TimerRecord.Arguments = nil
+		TimersByThread[CoroutineThread] = nil
+	end
+	local Entry = DeferredByThread[CoroutineThread]
+	if Entry then
+		Entry.Cancelled = true
+		Entry.Arguments = nil
+		DeferredByThread[CoroutineThread] = nil
+	end
+end
+
 const function ScheduleTimer(
 	Seconds : number?,
 	CoroutineThread : thread,
 	Start : number?,
 	Arguments : { any }?
 )
+	RemoveScheduledEntries(CoroutineThread)
 	SequenceNumber += 1
 	local TimerRecord : Timer = {
 		Due = VirtualNow + math.max(Seconds or 0, 0),
@@ -211,6 +227,7 @@ function Clock.Defer<CallbackArguments...>(
 		return EngineTaskLibrary.defer(Callback :: any, ...)
 	end
 	local CoroutineThread = ToThread(Callback)
+	RemoveScheduledEntries(CoroutineThread)
 	local Entry : Deferred = { Thread = CoroutineThread, Arguments = Pack(...) }
 	DeferredByThread[CoroutineThread] = Entry
 	Tail += 1
@@ -223,22 +240,13 @@ function Clock.Cancel(CoroutineThread : thread)
 		EngineTaskLibrary.cancel(CoroutineThread)
 		return
 	end
-	local TimerRecord = TimersByThread[CoroutineThread]
-	if TimerRecord then
-		TimerRecord.Cancelled = true
-		TimerRecord.Arguments = nil
-		TimersByThread[CoroutineThread] = nil
-	end
-	local Entry = DeferredByThread[CoroutineThread]
-	if Entry then
-		Entry.Cancelled = true
-		Entry.Arguments = nil
-		DeferredByThread[CoroutineThread] = nil
-	end
-	if IsRoblox then
-		EngineTaskLibrary.cancel(CoroutineThread)
-	elseif coroutine.status(CoroutineThread) == "suspended" then
-		coroutine.close(CoroutineThread)
+	RemoveScheduledEntries(CoroutineThread)
+	if coroutine.status(CoroutineThread) == "suspended" then
+		if IsRoblox then
+			EngineTaskLibrary.cancel(CoroutineThread)
+		else
+			coroutine.close(CoroutineThread)
+		end
 	end
 end
 
@@ -310,20 +318,34 @@ end
 
 const function RunFrame(DeltaTime : number)
 	local Last = SequenceNumber
-	while
-		Heap[1] ~= nil
-		and Heap[1].Due <= VirtualNow + TimeTolerance
-		and Heap[1].Sequence <= Last
-	do
+	local NextFrame : { Timer }? = nil
+	while Heap[1] ~= nil and Heap[1].Due <= VirtualNow + TimeTolerance do
 		local TimerRecord = Pop()
-		if not TimerRecord.Cancelled then
-			if TimersByThread[TimerRecord.Thread] == TimerRecord then
-				TimersByThread[TimerRecord.Thread] = nil
-			end
-			if TimerRecord.Start then
-				Resume(TimerRecord.Thread, VirtualNow - TimerRecord.Start)
+		if TimerRecord.Cancelled then
+			continue
+		end
+		if TimerRecord.Sequence > Last then
+			local Held = NextFrame
+			if Held == nil then
+				NextFrame = { TimerRecord }
 			else
-				ResumeWithArguments(TimerRecord.Thread, TimerRecord.Arguments)
+				table.insert(Held, TimerRecord)
+			end
+			continue
+		end
+		if TimersByThread[TimerRecord.Thread] == TimerRecord then
+			TimersByThread[TimerRecord.Thread] = nil
+		end
+		if TimerRecord.Start then
+			Resume(TimerRecord.Thread, VirtualNow - TimerRecord.Start)
+		else
+			ResumeWithArguments(TimerRecord.Thread, TimerRecord.Arguments)
+		end
+	end
+	if NextFrame then
+		for _, TimerRecord in NextFrame do
+			if not TimerRecord.Cancelled then
+				Push(TimerRecord)
 			end
 		end
 	end
