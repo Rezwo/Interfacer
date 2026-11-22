@@ -1047,8 +1047,73 @@ const function ConstructInstance(ClassName : string, Properties : any) : Instanc
 	return Result
 end
 
+type PropertySources = { [number] : { [any] : any }?, n : number }
+const MergedPropertySources : { [any] : PropertySources } = setmetatable({} :: { [any] : PropertySources }, { __mode = "k" })
+
+const MergedPropertiesMetatable = table.freeze({
+	__index = function(Self : any, Key : any) : any
+		local Sources = MergedPropertySources[Self]
+		for Index = Sources.n, 1, -1 do
+			local Source = Sources[Index]
+			if Source ~= nil then
+				local Value = Source[Key]
+				if Value ~= nil then
+					return Value
+				end
+			end
+		end
+		return nil
+	end,
+	__newindex = function()
+		error("Merge returns a read-only property view", 2)
+	end,
+	__len = function(Self : any) : number
+		local Sources = MergedPropertySources[Self]
+		local MaximumLength = 0
+		for Index = 1, Sources.n do
+			local Source = Sources[Index]
+			if Source ~= nil then
+				MaximumLength = math.max(MaximumLength, #Source)
+			end
+		end
+		return MaximumLength
+	end,
+	__iter = function(Self : any)
+		local Sources = MergedPropertySources[Self]
+		local Snapshot = {}
+		for Index = 1, Sources.n do
+			local Source = Sources[Index]
+			if Source ~= nil then
+				for Key, Value in Source do
+					Snapshot[Key] = Value
+				end
+			end
+		end
+		return next, Snapshot
+	end,
+})
+
+const function MergeProperties(... : any) : any
+	local Sources = table.pack(...)
+	for Index = 1, Sources.n do
+		local Source = Sources[Index]
+		assert(Source == nil or type(Source) == "table", "Merge expects tables or nil")
+	end
+	local View = setmetatable({}, MergedPropertiesMetatable)
+	MergedPropertySources[View] = Sources
+	return View
+end
+
+type MergePropertiesFunction = <First, Second, Third, Fourth>(
+	First : First & {},
+	Second : (Second & {})?,
+	Third : (Third & {})?,
+	Fourth : (Fourth & {})?
+) -> Type.MergeTables<First, Second, Third, Fourth>
+
 return table.freeze({
 	Edit = EditInstance,
+	Merge = MergeProperties :: MergePropertiesFunction,
 	New = ConstructInstance,
 	Flags = Flags,
 	Defaults = Defaults,

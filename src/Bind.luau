@@ -698,4 +698,92 @@ function Bind.To<ValueType>(
 	return DisconnectBinding, RegisteredTarget ~= nil
 end
 
+type SignalConnection = { read Disconnect : (Self : any) -> () }
+type SignalSource<ValueType> =
+	{ read Connect : (Self : any, Callback : (Value : ValueType) -> ()) -> SignalConnection }
+	| { read connect : (Self : any, Callback : (Value : ValueType) -> ()) -> SignalConnection }
+
+const function BridgeSignal(Source : any, InitialValue : any) : Graph.Node<any>
+	local Connector = if Source ~= nil then Source.Connect else nil
+	if Connector == nil and type(Source) == "table" then
+		Connector = Source.connect
+	end
+	assert(type(Connector) == "function", "FromSignal expects a source with Connect or connect")
+	local Node = CreateState(InitialValue)
+	local Active = true
+	local Connection : any = nil
+	Node:OnDestroy(function()
+		Active = false
+		local Current = Connection
+		Connection = nil
+		if Current ~= nil then
+			Current:Disconnect()
+		end
+	end)
+	if Graph.GetOwner() ~= nil then
+		Graph.Cleanup(Node)
+	end
+	local Passed, Result = pcall(Connector, Source, function(Value : any)
+		if Active then
+			Node:Set(Value)
+		end
+	end)
+	if not Passed then
+		Node:Destroy()
+		error(Result, 0)
+	end
+	if Active then
+		Connection = Result
+	else
+		Result:Disconnect()
+	end
+	return Node
+end
+
+Bind.FromSignal = BridgeSignal :: (<ValueType>(
+	Source : SignalSource<ValueType>,
+	InitialValue : ValueType
+) -> Graph.Node<ValueType>) & (<ValueType>(
+	Source : SignalSource<ValueType>
+) -> Graph.Node<ValueType?>) & (<ValueType>(
+	Source : RBXScriptSignal,
+	InitialValue : ValueType
+) -> Graph.Node<ValueType>) & ((Source : RBXScriptSignal) -> Graph.Node<unknown>)
+
+function Bind.Listen<ValueType>(Node : Graph.Node<ValueType>, Callback : (ValueType) -> ()) : () -> ()
+	assert(IsReactiveNode(Node), "Listen expects a reactive node")
+	assert(type(Callback) == "function", "Listen expects a callback")
+	local PreviousValue : ValueType? = ReadRawValue(Node)
+	local Receiver : ((ValueType) -> ())? = Callback
+	local Effect : Graph.Node<any>? = nil
+
+	local function Stop()
+		Receiver = nil
+		PreviousValue = nil
+		local Current = Effect
+		Effect = nil
+		if Current ~= nil then
+			Current:Destroy()
+		end
+	end
+
+	Node:OnDestroy(Stop)
+	if Receiver ~= nil then
+		Effect = CreateEffect(function()
+			local Value = ReadNodeValue(Node)
+			local Deliver = Receiver
+			if Deliver ~= nil and Value ~= PreviousValue then
+				PreviousValue = Value
+				RunUntracked(function()
+					Deliver(Value)
+				end)
+			end
+		end)
+	end
+	if Graph.GetOwner() ~= nil then
+		Graph.Cleanup(Stop)
+	end
+	return Stop
+end
+
 return table.freeze(Bind)

@@ -273,23 +273,109 @@ const function ResolveFallback<ItemType, DependencyType>(
 	end)
 end
 
-const function CreateMapper(List : any, MappingCallback : any, KeyedByValue : boolean) : Node<any>
+const NotANumberKey = table.freeze({})
+
+const function SweepMapperRows(
+	Records : { [any] : Node<any> },
+	ItemNodes : { [any] : Node<any> }?,
+	Cache : { [any] : any },
+	CurrentKeys : { [any] : boolean }
+) : number
+	local LiveItemCount = 0
+	for Key, Record in Records do
+		if CurrentKeys[Key] == nil then
+			DestroyNode(Record)
+			Records[Key] = nil
+			if ItemNodes ~= nil then
+				DestroyNode(ItemNodes[Key])
+				ItemNodes[Key] = nil
+			end
+			DisposeResource(Cache[Key])
+			Cache[Key] = nil
+		else
+			LiveItemCount += 1
+		end
+	end
+	return LiveItemCount
+end
+
+const function DestroyMapperRows(
+	Records : { [any] : Node<any> },
+	ItemNodes : { [any] : Node<any> }?,
+	Cache : { [any] : any },
+	CurrentKeys : { [any] : boolean }
+)
+	for Key, Record in Records do
+		DestroyNode(Record)
+		if ItemNodes ~= nil then
+			DestroyNode(ItemNodes[Key])
+		end
+		DisposeResource(Cache[Key])
+	end
+	table.clear(Records)
+	if ItemNodes ~= nil then
+		table.clear(ItemNodes)
+	end
+	table.clear(Cache)
+	table.clear(CurrentKeys)
+end
+
+const function CreateMapper(
+	List : any,
+	MappingCallback : any,
+	KeyedByValue : boolean,
+	ExtractKey : ((any) -> any)?,
+	EmptyFallback : any?
+) : Node<any>
+	local Render : (any, any) -> any = MappingCallback
+	assert(type(MappingCallback) == "function", "mapFn must be a function")
+	local RenderEmpty : (() -> any)? = nil
+	if EmptyFallback ~= nil then
+		local FallbackCallback : () -> any = EmptyFallback
+		assert(type(EmptyFallback) == "function", "fallback must be a function")
+		RenderEmpty = FallbackCallback
+	end
 	local Cache : { [any] : any } = {}
-	local Nodes : { [any] : Node<any> } = {}
+	local Records : { [any] : Node<any> } = {}
+	local ItemNodes : { [any] : Node<any> }? = if ExtractKey ~= nil then {} else nil
 	local CurrentKeys : { [any] : boolean } = {}
 	local CachedItemCount = 0
 	local RebuildAborted = false
 	local FirstMappingArgument : any, SecondMappingArgument : any
+	local FallbackOwner : Node<any>? = nil
+	local FallbackItem : any = nil
+	local FallbackOutput : { any }? = nil
+	local Destroyed = false
+
+	local function ClearFallback()
+		local Owner = FallbackOwner
+		if Owner ~= nil then
+			local Item = FallbackItem
+			FallbackOwner = nil
+			FallbackItem = nil
+			FallbackOutput = nil
+			DestroyNode(Owner)
+			DisposeResource(Item)
+		end
+	end
 
 	local function Build()
-		local FirstValue, SecondValue = FirstMappingArgument, SecondMappingArgument
+		local FirstArgument, SecondArgument = FirstMappingArgument, SecondMappingArgument
 		FirstMappingArgument, SecondMappingArgument = nil, nil
-		return MappingCallback(FirstValue, SecondValue)
+		return Render(FirstArgument, SecondArgument)
 	end
 
 	local Self = CreateComputed(function()
 		local Current = ReadReactiveValue(List) :: { any }
 		if type(Current) ~= "table" then
+			if CachedItemCount > 0 or RebuildAborted or next(Records) ~= nil or FallbackOwner ~= nil then
+				RunUntracked()
+				ClearFallback()
+				DestroyMapperRows(Records, ItemNodes, Cache, CurrentKeys)
+				CachedItemCount = 0
+				RebuildAborted = false
+				RunRetracked()
+			end
 			return {}
 		end
 
@@ -300,34 +386,95 @@ const function CreateMapper(List : any, MappingCallback : any, KeyedByValue : bo
 		RebuildAborted = true
 		RunUntracked()
 
+		local GetKey = ExtractKey
+		local ItemRecords = ItemNodes
 		local Seen, Added = 0, 0
 		for Index, Value in Current do
+			if Destroyed then
+				RunRetracked()
+				return {}
+			end
 			local Key : any, Held : any = Index, Value
 			if KeyedByValue then
-				Key, Held = Value, Index
+				if GetKey ~= nil then
+					local KeyPassed, RawKey = pcall(GetKey, Value)
+					if not KeyPassed then
+						RunRetracked()
+						error(RawKey, 0)
+					end
+					if RawKey ~= RawKey then
+						ReportWarning("[Flux] Interfacer.ForKey: NaN key fell back to item identity; keys must not be NaN")
+						Key = Value
+					else
+						Key = if RawKey == nil then Value else RawKey
+					end
+				else
+					if Value == nil then
+						ReportWarning("[Flux] Interfacer.ForValue: nil item skipped; use Interfacer.ForIndex for sparse lists")
+						continue
+					end
+					Key = Value
+				end
+				if Key ~= Key then
+					Key = NotANumberKey
+				end
+				Held = Index
 				if CurrentKeys[Key] ~= nil then
 					ReportWarning(
-						"[Flux] Flux.forValue: duplicate values share one mapped instance (the value is the cache key); use Flux.forIndex"
+						if GetKey ~= nil
+							then "[Flux] Interfacer.ForKey: duplicate keys share one mapped instance; keys must be unique"
+							else "[Flux] Interfacer.ForValue: duplicate values share one mapped instance (the value is the cache key); use Interfacer.ForIndex"
 					)
 					Seen -= 1
 				end
 			end
 			CurrentKeys[Key] = true
 			Seen += 1
-			local Record = Nodes[Key]
+			local Record = Records[Key]
 			if Record ~= nil then
 				SetNodeValue(Record, Held)
+				if ItemRecords ~= nil then
+					SetNodeValue(ItemRecords[Key], Value)
+				end
 				Output[Index] = Cache[Key]
 			else
 				Record = CreateState(Held)
-				if KeyedByValue then
+				local ItemRecord : Node<any>? = nil
+				if ItemRecords ~= nil then
+					ItemRecord = CreateState(Value)
+					FirstMappingArgument, SecondMappingArgument = Record, ItemRecord
+				elseif KeyedByValue then
 					FirstMappingArgument, SecondMappingArgument = Record, Value
 				else
 					FirstMappingArgument, SecondMappingArgument = Index, Record
 				end
-				local Mapped = RunWithOwner(Record, Build)
+				local Passed, Mapped = pcall(RunWithOwner, Record, Build)
+				if Destroyed then
+					FirstMappingArgument, SecondMappingArgument = nil, nil
+					DestroyNode(Record)
+					if ItemRecord ~= nil then
+						DestroyNode(ItemRecord)
+					end
+					if Passed then
+						DisposeResource(Mapped)
+					end
+					RunRetracked()
+					return {}
+				end
+				if not Passed then
+					FirstMappingArgument, SecondMappingArgument = nil, nil
+					DestroyNode(Record)
+					if ItemRecord ~= nil then
+						DestroyNode(ItemRecord)
+					end
+					RunRetracked()
+					error(Mapped, 0)
+				end
+				if ItemRecord ~= nil then
+					(ItemRecords :: { [any] : Node<any> })[Key] = ItemRecord
+				end
 				Cache[Key] = Mapped
-				Nodes[Key] = Record
+				Records[Key] = Record
 				Added += 1
 				Output[Index] = Mapped
 			end
@@ -336,56 +483,82 @@ const function CreateMapper(List : any, MappingCallback : any, KeyedByValue : bo
 		RebuildAborted = false
 
 		if MustScan or Seen ~= CachedItemCount + Added then
-			local LiveItemCount = 0
-			for Key, Record in Nodes do
-				if CurrentKeys[Key] == nil then
-					Record:Destroy()
-					Nodes[Key] = nil
-					DisposeResource(Cache[Key])
-					Cache[Key] = nil
-				else
-					LiveItemCount += 1
-				end
-			end
-			CachedItemCount = LiveItemCount
+			CachedItemCount = SweepMapperRows(Records, ItemRecords, Cache, CurrentKeys)
 		else
 			CachedItemCount += Added
 		end
 
+		if Seen == 0 and RenderEmpty ~= nil then
+			if FallbackOwner == nil then
+				local Passed, Branch, Mapped = MountBranch(RenderEmpty, nil, nil)
+				if Destroyed then
+					if Passed then
+						if Branch ~= nil then
+							DestroyNode(Branch)
+						end
+						DisposeResource(Mapped)
+					end
+					RunRetracked()
+					return {}
+				end
+				if not Passed then
+					RunRetracked()
+					error(Branch, 0)
+				end
+				FallbackOwner = Branch
+				FallbackItem = Mapped
+				FallbackOutput = if Mapped == nil then {} else { Mapped }
+			end
+			RunRetracked()
+			return FallbackOutput :: { any }
+		end
+
+		ClearFallback()
+		RunRetracked()
 		return Output
 	end)
 
 	Self:OnDestroy(function()
-		for Key, Record in Nodes do
-			Record:Destroy()
-			DisposeResource(Cache[Key])
-		end
-		table.clear(Nodes)
-		table.clear(Cache)
-		table.clear(CurrentKeys)
+		Destroyed = true
+		ClearFallback()
+		DestroyMapperRows(Records, ItemNodes, Cache, CurrentKeys)
 	end)
 
 	return Self
 end
 
-const function MapByIndex<ListType, OutputType>(
-	List : ListType,
-	MappingCallback : (
-		Index : number,
-		ItemValue : Node<Item<ListType>>
-	) -> OutputType
-) : Node<{ OutputType }>
-	return CreateMapper(List, MappingCallback, false)
+
+type function WithoutUnknown(ValueType : type) : type
+	if ValueType:is("unknown") then
+		return types.never
+	end
+	return ValueType
 end
 
-const function MapByValue<ListType, OutputType>(
+const function MapByIndex<ListType, OutputType, FallbackType>(
 	List : ListType,
-	MappingCallback : (
-		Index : Node<number>,
-		Value : Item<ListType>
-	) -> OutputType
-) : Node<{ OutputType }>
-	return CreateMapper(List, MappingCallback, true)
+	MappingCallback : (Index : number, ItemValue : Node<Item<ListType>>) -> OutputType,
+	EmptyFallback : (() -> FallbackType)?
+) : Node<{ OutputType | WithoutUnknown<FallbackType> }>
+	return CreateMapper(List, MappingCallback, false, nil, EmptyFallback)
+end
+
+const function MapByValue<ListType, OutputType, FallbackType>(
+	List : ListType,
+	MappingCallback : (Index : Node<number>, Value : Item<ListType>) -> OutputType,
+	EmptyFallback : (() -> FallbackType)?
+) : Node<{ OutputType | WithoutUnknown<FallbackType> }>
+	return CreateMapper(List, MappingCallback, true, nil, EmptyFallback)
+end
+
+const function MapByKey<ListType, OutputType, FallbackType>(
+	List : ListType,
+	GetKey : (ItemValue : Item<ListType>) -> any,
+	MappingCallback : (Index : Node<number>, ItemValue : Node<Item<ListType>>) -> OutputType,
+	EmptyFallback : (() -> FallbackType)?
+) : Node<{ OutputType | WithoutUnknown<FallbackType> }>
+	assert(type(GetKey) == "function", "GetKey must be a function")
+	return CreateMapper(List, MappingCallback, true, GetKey, EmptyFallback)
 end
 
 const MinimumSweepCount = 32
@@ -554,5 +727,6 @@ return table.freeze({
 	Fallback = ResolveFallback,
 	ForIndex = MapByIndex,
 	ForValue = MapByValue,
+	ForKey = MapByKey,
 	Selector = CreateSelector,
 })

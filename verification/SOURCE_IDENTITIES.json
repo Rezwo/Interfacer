@@ -1,17 +1,17 @@
 {
   "sha256": {
-    "src/Asynchronous.luau": "3c3c74149c8dc7fa1da0add01a94577adbf2ac60a01d1a99b18a357df12e4e49",
-    "src/Bind.luau": "dcd8926208ca68277c25c96ac92e2862e90edf39ab4d6c87ebfdb6cf3d453628",
+    "src/Asynchronous.luau": "bae3aad0f97bd0986e8f42e8b1b1c395e939c6fc60496cd0f89fb02cec593e3a",
+    "src/Bind.luau": "8d8e24961c558194b488a4d2d52167bf60c4efeb203cec13c776c60dfa5ef3de",
     "src/Clock.luau": "b43f527f81dd4d39f01f2213d62b42e3e0a9acc8656a8bf6f08af225f3a08276",
     "src/Compatibility.luau": "fe1f1461412d2876c58e5f9c0493df964891d77b8fa67d5933044a30d591fcec",
-    "src/Conditional.luau": "27805edf2f807294a97b09021824dcfec9315e64a2c29edc13e366d14b2f89c7",
+    "src/Conditional.luau": "77cccc69b35ff6bcde51a8f37e6feebebf5a3826d60438202cb0a0a4e0cc9dfe",
     "src/Dialog.luau": "7b5e226f1e48fd966b5d54220b2f37200f45e75b5be285315b9a3c4267641a30",
-    "src/Edit.luau": "a9950b8d4626e40f53d9ea9aac93fe8fa44bbcb22d2b5a7fa4427947e47d1408",
+    "src/Edit.luau": "32fc7d90faefc770dd344524d8e1598259817cb10c8541423ddd132b63f867ee",
     "src/ExitVisual.luau": "442c080d6bb880a7b42ca30bde4cdae39ec6b5713adff6ba2cec774a4891a5e8",
     "src/Graph.luau": "f1746cdffabc7e809bc510de9525dc205e0c82321f57e283dda254e4ff604ec8",
     "src/Interact.luau": "06de1d87e0fb4d95c088dec64d5a10250f279988fbe80766b38b4b773f3df62c",
-    "src/Layout.luau": "69c8f8e0091320b76726679f09c2c6d3066bbb96e7285c20250736c7c07b33c2",
-    "src/Motion.luau": "47c5532eaa67fd1a48200e6e3ead8d7aef72f2e0dfe7773d6a2713763c35edad",
+    "src/Layout.luau": "3ce636c1e1d5ff5bb49099c72acf6873d979510215ee645cde5be67f90377bfc",
+    "src/Motion.luau": "a39ce93a80a7c8a5676cc39af7f4c1db8ee040104b5ea1d00b618ec41bc041d9",
     "src/Overlay.luau": "8acfa1d0b0e95c029890761b2d4a0b6d5a3e39f6c15c28140fe3ae7e3a40c5e7",
     "src/PresentationSnapshots.luau": "cea096a5e6ec78aaee03f4b6ce2292f0eecd8caf69cb29c69866c96dd404298b",
     "src/PresentationSurface.luau": "3c207e5859255c5033111076ce06b66854d7b412e839def6432ebed998218f5e",
@@ -22,10 +22,10 @@
     "src/Store.luau": "bb0e487972d0d7e35ebb834c0129482992263bbf96c7dcb4d47995079f556653",
     "src/TransactionalNative.luau": "336719dedeaad9899499acff4d0e2bb2d2a3401889f2cfd0a6ed3126700defae",
     "src/Type/Instances.luau": "aacf79e75769b4c59c35f86f75ba9cc424bb17a7ae81aa85cc968eb2c924d4c1",
-    "src/Type/init.luau": "f53abf1dca0d328310f436b1c61745a09f3a9db2f9e5f4e6e684c70aeefc46e9",
+    "src/Type/init.luau": "078509c4695d9410997087d7e1539bf9ea02d65973340e6d97b868be21e4efbb",
     "src/VirtualCollection.luau": "b97b1e614ad90153830251e3d0ec22ed42cb965ef69032f4e4bd362bc2b95ee0",
     "src/VirtualGeometry.luau": "ade2f40f0d151bfa3caed6d71bc62ecbab847d84d381843c2088ae514f053541",
     "src/VirtualSynchronous.luau": "f139b35a981a4a9d8c00caaff618986cbdc99b4eee964688d9c35c6ddbeaaf3c",
-    "src/init.luau": "b6f018056ee53de506bfae26a8d2f9a2313fe11501acffaf1b804d18df837b34"
+    "src/init.luau": "ab9dcba62c396e72e46373dd2e443291301c65858687286bc2181b0a201f8d2e"
   }
 }

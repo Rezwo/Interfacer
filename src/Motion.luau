@@ -43,6 +43,10 @@ export type Spring<ValueType> = Graph.Node<ValueType> & {
 	Snap : (Self : any, AnimatedValue : ValueType) -> (),
 }
 
+export type TweenNode<ValueType> = Graph.Node<ValueType> & {
+	Snap : (Self : any, AnimatedValue : ValueType) -> (),
+}
+
 local function FromLinear(ComponentValue : number) : number
 	return if ComponentValue < 0.0031308
 		then ComponentValue * 12.92
@@ -1135,11 +1139,18 @@ function MotionStateMetatable.SetCurrent<ValueType>(Self : Graph.Node<ValueType>
 end
 
 function MotionStateMetatable.Snap<ValueType>(Self : Graph.Node<ValueType>, AnimatedValue : ValueType)
-	local SpringRecord = PackSpring(Self, "snap", AnimatedValue)
-	if SpringRecord ~= nil then
-		MotionEngine.Snap(SpringRecord, TemporaryComponents)
-		SetNodeValue(SpringRecord.Node, SpringRecord.Unpack(SpringRecord.Value))
+	local MotionRecord = MotionByNode[Self]
+	if MotionRecord == nil then
+		ReportWarning("[Interfacer] Snap called on a destroyed motion node; ignoring")
+		return
 	end
+	local Value = ReadRawValue(AnimatedValue)
+	local ValueTypeName = CompatibleTypeOf(Value)
+	if ValueTypeName ~= MotionRecord.ValueTypeName then
+		error(`Cannot snap a {MotionRecord.ValueTypeName} motion to a {ValueTypeName} value`, 2)
+	end
+	MotionEngine.Snap(MotionRecord, PackValue(TemporaryComponents, Value, ValueTypeName))
+	SetNodeValue(MotionRecord.Node, MotionRecord.Unpack(MotionRecord.Value))
 end
 
 function MotionStateMetatable.__call<ValueType>(Self : Graph.Node<ValueType>, AnimatedValue : any?) : any?
@@ -1256,7 +1267,7 @@ end
 function MotionModule.Tween<TargetType>(
 	Target : TargetType,
 	TweenInformation : Reactive<TweenInfo>?
-) : Graph.Node<Unwrap<TargetType>>
+) : TweenNode<Unwrap<TargetType>>
 	local InitialValue = ReadRawValue(Target)
 	local ValueTypeName = CompatibleTypeOf(InitialValue)
 	local Fallback = PackOrFallback(Target, InitialValue, ValueTypeName)

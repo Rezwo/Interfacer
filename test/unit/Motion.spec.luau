@@ -58,7 +58,7 @@ local function tweenToGoal(start : any, goal : any)
 	return tw:Get()
 end
 
-test("motion · nil-goal fallback follows and survives retarget (expected warn)", function()
+test("motion Â· nil-goal fallback follows and survives retarget (expected warn)", function()
 
 	local goal = Flux.State(nil)
 	local spr = Flux.Spring(goal)
@@ -72,7 +72,7 @@ test("motion · nil-goal fallback follows and survives retarget (expected warn)"
 	expect(spr:Get() == 7, "STILL follows after retarget")
 end)
 
-test("motion · non-animatable types error at the call site", function()
+test("motion Â· non-animatable types error at the call site", function()
 	expectError(function()
 		return Flux.Spring(true)
 	end, "Cannot animate a boolean value")
@@ -81,7 +81,7 @@ test("motion · non-animatable types error at the call site", function()
 	end, "Cannot animate a string value")
 end)
 
-test("motion · number spring converges (manual step)", function()
+test("motion Â· number spring converges (manual step)", function()
 	local goal = Flux(0)
 	local spr = Flux.Spring(goal, 10, 1)
 	goal:Set(100)
@@ -93,7 +93,7 @@ test("motion · number spring converges (manual step)", function()
 	expect(approx(spr:Get(), 100, 0.5), `spring converged, got {spr:Get()}`)
 end)
 
-test("motion · impulse kicks a resting number spring", function()
+test("motion Â· impulse kicks a resting number spring", function()
 	local spr = Flux.Spring(0, 10, 1)
 	Motion.Step()
 	expect(approx(spr:Get(), 0), "starts at rest at 0")
@@ -107,7 +107,7 @@ test("motion · impulse kicks a resting number spring", function()
 	expect(approx(spr:Get(), 0, 0.5), `spring returns to target after impulse, got {spr:Get()}`)
 end)
 
-test("motion · impulse accumulates (two impulses > one)", function()
+test("motion Â· impulse accumulates (two impulses > one)", function()
 	local a = Flux.Spring(0, 10, 1)
 	local b = Flux.Spring(0, 10, 1)
 	Motion.Step()
@@ -120,7 +120,7 @@ test("motion · impulse accumulates (two impulses > one)", function()
 	expect(b:Get() > a:Get(), `accumulated impulse travels further: a={a:Get()} b={b:Get()}`)
 end)
 
-test("motion · setVelocity replaces (not adds)", function()
+test("motion Â· setVelocity replaces (not adds)", function()
 	local spr = Flux.Spring(0, 10, 1)
 	Motion.Step()
 	spr:Impulse(1000)
@@ -130,7 +130,7 @@ test("motion · setVelocity replaces (not adds)", function()
 	expect(approx(spr:Get(), 0, 1e-3), `setVelocity(0) cancelled the impulse, got {spr:Get()}`)
 end)
 
-test("motion · impulse reactivates a converged spring", function()
+test("motion Â· impulse reactivates a converged spring", function()
 	local goal = Flux(0)
 	local spr = Flux.Spring(goal, 10, 1)
 	goal:Set(50)
@@ -143,7 +143,7 @@ test("motion · impulse reactivates a converged spring", function()
 	expect(spr:Get() < 50, `impulse re-woke the converged spring, got {spr:Get()}`)
 end)
 
-test("motion · underdamped number spring overshoots then converges", function()
+test("motion Â· underdamped number spring overshoots then converges", function()
 	local goal = Flux(0)
 	local spr = Flux.Spring(goal, 12, 0.3)
 	goal:Set(100)
@@ -163,7 +163,7 @@ test("motion · underdamped number spring overshoots then converges", function()
 	expect(approx(spr:Get(), 100, 0.5), `underdamped spring converged, got {spr:Get()}`)
 end)
 
-test("motion · overdamped number spring converges monotonically (no overshoot)", function()
+test("motion Â· overdamped number spring converges monotonically (no overshoot)", function()
 	local goal = Flux(0)
 	local spr = Flux.Spring(goal, 12, 2)
 	goal:Set(100)
@@ -193,7 +193,7 @@ test("motion · overdamped number spring converges monotonically (no overshoot)"
 	expect(approx(spr:Get(), 100, 0.5), `overdamped spring converged, got {spr:Get()}`)
 end)
 
-test("motion · scope teardown unregisters a spring from the engine", function()
+test("motion Â· scope teardown unregisters a spring from the engine", function()
 
 	local ms
 	local sc = Flux.Scope(function()
@@ -208,7 +208,7 @@ test("motion · scope teardown unregisters a spring from the engine", function()
 	expect(ms:Get() == before, "the engine no longer steps the scope-destroyed spring")
 end)
 
-test("motion · vector spring round-trips exactly and converges componentwise", function()
+test("motion Â· vector spring round-trips exactly and converges componentwise", function()
 
 	local start = vector.create(1.5, -2.25, 3.125)
 	local goal = Flux.State(start)
@@ -227,20 +227,19 @@ test("motion · vector spring round-trips exactly and converges componentwise", 
 end)
 
 test(
-	"motion · impulse/setVelocity/setCurrent/snap warn on a tween node (expected warn)",
+	"motion Â· impulse/setVelocity/setCurrent warn on a tween node (expected warn)",
 	function()
 		local tw = Flux.Tween(0, TweenInfo.new(0.2)) :: any
 		tw:Impulse(100)
 		tw:SetVelocity(100)
 		tw:SetCurrent(50)
-		tw:Snap(50)
 		expect(approx(tw:Get(), 0), "tween value unchanged by spring-only controls")
 		tw:Destroy()
 	end
 )
 
 test(
-	"motion · snap, setCurrent, initialVelocity, reactive frequency/damping, and type guards",
+	"motion Â· snap, setCurrent, initialVelocity, reactive frequency/damping, and type guards",
 	function()
 		local goal = Flux.State(0)
 		local freq = Flux.State(10)
@@ -287,7 +286,7 @@ test(
 	end
 )
 
-test("motion · tween reactive TweenInfo, DelayTime, and easing styles", function()
+test("motion Â· tween reactive TweenInfo, DelayTime, and easing styles", function()
 	local goal = Flux.State(0)
 	local info = Flux.State(
 		TweenInfo.new(0.4, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, 0, false, 0.2)
@@ -342,7 +341,7 @@ test("motion · tween reactive TweenInfo, DelayTime, and easing styles", functio
 	end
 end)
 
-test("motion · Vector3 spring impulse moves componentwise", function()
+test("motion Â· Vector3 spring impulse moves componentwise", function()
 	local spr = Flux.Spring(Vector3.zero, 10, 1)
 	advance(0.05)
 	spr:Impulse(Vector3.new(0, 200, 0))
@@ -351,7 +350,7 @@ test("motion · Vector3 spring impulse moves componentwise", function()
 	expect(v.Y > 0 and math.abs(v.X) < 1e-2, `impulse hit Y only, got {tostring(v)}`)
 end)
 
-test("motion · Vector3 spring follows a reactive goal", function()
+test("motion Â· Vector3 spring follows a reactive goal", function()
 	local goal = Flux.State(Vector3.zero)
 	local spr = Flux.Spring(goal, 10, 1)
 	goal:Set(Vector3.new(0, 50, 0))
@@ -361,7 +360,7 @@ test("motion · Vector3 spring follows a reactive goal", function()
 	expect(v.Y > 1, `spring moved toward the goal, got {tostring(v)}`)
 end)
 
-test("motion · UDim2 tween reaches its goal", function()
+test("motion Â· UDim2 tween reaches its goal", function()
 	local goal = Flux.State(UDim2.fromScale(0, 0))
 	local tw = Flux.Tween(goal, TweenInfo.new(0))
 	goal:Set(UDim2.fromScale(1, 0))
@@ -378,7 +377,7 @@ test("motion · UDim2 tween reaches its goal", function()
 	)
 end)
 
-test("motion · tween linear easing is ~quarter-value at quarter-flight", function()
+test("motion Â· tween linear easing is ~quarter-value at quarter-flight", function()
 
 	local goal = Flux.State(0)
 	local tw = Flux.Tween(goal, TweenInfo.new(1, Enum.EasingStyle.Linear))
@@ -388,7 +387,7 @@ test("motion · tween linear easing is ~quarter-value at quarter-flight", functi
 	expect(v > 18 and v < 40, `linear tween ~25 at quarter-flight, got {v}`)
 end)
 
-test("motion · tween Reverses heads back toward the start", function()
+test("motion Â· tween Reverses heads back toward the start", function()
 	local goal = Flux.State(0)
 
 	local tw = Flux.Tween(
@@ -402,7 +401,7 @@ test("motion · tween Reverses heads back toward the start", function()
 	expect(v < 30, `Reverses=true sent the tween back toward start, got {v}`)
 end)
 
-test("motion · tween RepeatCount loops back toward the start", function()
+test("motion Â· tween RepeatCount loops back toward the start", function()
 	local goal = Flux.State(0)
 	local tw =
 		Flux.Tween(goal, TweenInfo.new(0.5, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, 2))
@@ -413,7 +412,7 @@ test("motion · tween RepeatCount loops back toward the start", function()
 	expect(v < 50, `RepeatCount restarted the leg near the start, got {v}`)
 end)
 
-test("motion · number tween lands EXACTLY on the goal", function()
+test("motion Â· number tween lands EXACTLY on the goal", function()
 	local goal = Flux.State(0)
 	local tw = Flux.Tween(goal, TweenInfo.new(0, Enum.EasingStyle.Linear))
 	goal:Set(42)
@@ -422,7 +421,7 @@ test("motion · number tween lands EXACTLY on the goal", function()
 	expect(approx(tw:Get(), 42, 1e-4), `number tween equals the goal exactly, got {tw:Get()}`)
 end)
 
-test("motion · UDim2 tween lands EXACTLY on the goal on both axes", function()
+test("motion Â· UDim2 tween lands EXACTLY on the goal on both axes", function()
 	local goal = Flux.State(UDim2.new(0, 0, 0, 0))
 	local tw = Flux.Tween(goal, TweenInfo.new(0, Enum.EasingStyle.Linear))
 	local target = UDim2.new(0.5, 10, 0.25, 20)
@@ -436,23 +435,23 @@ test("motion · UDim2 tween lands EXACTLY on the goal on both axes", function()
 	expect(approx(v.Y.Offset, 20, 1e-4), `Y.Offset exact, got {v.Y.Offset}`)
 end)
 
-test("motion · Vector2 reaches its goal", function()
+test("motion Â· Vector2 reaches its goal", function()
 	local got = tweenToGoal(Vector2.new(-3, 7), Vector2.new(12.5, -4.25))
 	expect(got == Vector2.new(12.5, -4.25), `Vector2 round-trip, got {tostring(got)}`)
 end)
 
-test("motion · Vector3 reaches its goal exactly", function()
+test("motion Â· Vector3 reaches its goal exactly", function()
 	local got = tweenToGoal(Vector3.new(-3, 7, 1), Vector3.new(12.5, -4.25, 9))
 	expect(got == Vector3.new(12.5, -4.25, 9), `Vector3 round-trip, got {tostring(got)}`)
 end)
 
-test("motion · UDim reaches its goal", function()
+test("motion Â· UDim reaches its goal", function()
 
 	local got = tweenToGoal(UDim.new(0, 0), UDim.new(0.5, 40))
 	expect(got.Scale == 0.5 and got.Offset == 40, `UDim round-trip, got {tostring(got)}`)
 end)
 
-test("motion · UDim2 reaches its goal exactly", function()
+test("motion Â· UDim2 reaches its goal exactly", function()
 
 	local got = tweenToGoal(UDim2.new(0, 0, 0, 0), UDim2.new(0.25, 30, 0.75, -10))
 	expect(
@@ -461,7 +460,7 @@ test("motion · UDim2 reaches its goal exactly", function()
 	)
 end)
 
-rtest("motion · Rect reaches its goal", function()
+rtest("motion Â· Rect reaches its goal", function()
 
 	local got = tweenToGoal(Rect.new(0, 0, 1, 1), Rect.new(4, 8, 16, 32))
 	expect(
@@ -470,7 +469,7 @@ rtest("motion · Rect reaches its goal", function()
 	)
 end)
 
-rtest("motion · NumberRange reaches its goal", function()
+rtest("motion Â· NumberRange reaches its goal", function()
 	local got = tweenToGoal(NumberRange.new(0, 1), NumberRange.new(3.5, 9.25))
 	expect(
 		approx(got.Min, 3.5) and approx(got.Max, 9.25),
@@ -478,7 +477,7 @@ rtest("motion · NumberRange reaches its goal", function()
 	)
 end)
 
-test("motion · NumberSequenceKeypoint reaches its goal", function()
+test("motion Â· NumberSequenceKeypoint reaches its goal", function()
 
 	local goal = NumberSequenceKeypoint.new(0.4, 0.8, 0.1)
 	local got = tweenToGoal(NumberSequenceKeypoint.new(0, 0, 0), goal)
@@ -488,7 +487,7 @@ test("motion · NumberSequenceKeypoint reaches its goal", function()
 	)
 end)
 
-test("motion · NumberSequence reaches its goal", function()
+test("motion Â· NumberSequence reaches its goal", function()
 
 	local start = NumberSequence.new({
 		NumberSequenceKeypoint.new(0, 0, 0),
@@ -511,7 +510,7 @@ test("motion · NumberSequence reaches its goal", function()
 	end
 end)
 
-test("motion · ColorSequenceKeypoint reaches its goal", function()
+test("motion Â· ColorSequenceKeypoint reaches its goal", function()
 
 	local goal = ColorSequenceKeypoint.new(0.6, Color3.new(0.2, 0.4, 0.8))
 	local got = tweenToGoal(ColorSequenceKeypoint.new(0, Color3.new(0, 0, 0)), goal)
@@ -523,7 +522,7 @@ test("motion · ColorSequenceKeypoint reaches its goal", function()
 	)
 end)
 
-test("motion · ColorSequence reaches its goal", function()
+test("motion Â· ColorSequence reaches its goal", function()
 
 	local start = ColorSequence.new({
 		ColorSequenceKeypoint.new(0, Color3.new(1, 0, 0)),
@@ -548,7 +547,7 @@ test("motion · ColorSequence reaches its goal", function()
 	end
 end)
 
-test("motion · Color3 reaches its goal", function()
+test("motion Â· Color3 reaches its goal", function()
 
 	local goal = Color3.new(0.9, 0.1, 0.5)
 	local got = tweenToGoal(Color3.new(0, 0, 0), goal)
@@ -558,7 +557,7 @@ test("motion · Color3 reaches its goal", function()
 	)
 end)
 
-rtest("motion · CFrame reaches its goal", function()
+rtest("motion Â· CFrame reaches its goal", function()
 
 	local goal = CFrame.new(5, -2, 8) * CFrame.Angles(0, math.rad(90), 0)
 	local got = tweenToGoal(CFrame.new(0, 0, 0), goal)
@@ -579,7 +578,7 @@ rtest("motion · CFrame reaches its goal", function()
 	expect(ok, `CFrame rotation round-trip mismatch, got {tostring(got)}`)
 end)
 
-rtest("motion · NumberRange degenerate (Min==Max) reaches its goal", function()
+rtest("motion Â· NumberRange degenerate (Min==Max) reaches its goal", function()
 
 	local got = tweenToGoal(NumberRange.new(2, 2), NumberRange.new(5, 5))
 	expect(
@@ -589,7 +588,7 @@ rtest("motion · NumberRange degenerate (Min==Max) reaches its goal", function()
 end)
 
 test(
-	"motion · :set() and call-write on a destroyed motion warn and return early (expected warn)",
+	"motion Â· :set() and call-write on a destroyed motion warn and return early (expected warn)",
 	function()
 		local spr = Flux.Spring(0)
 		spr:Destroy()
@@ -604,7 +603,7 @@ test(
 )
 
 test(
-	"motion · waking a sleeping motion inside step callback does not corrupt iteration",
+	"motion Â· waking a sleeping motion inside step callback does not corrupt iteration",
 	function()
 		local b = Flux.Tween(0, TweenInfo.new(0, Enum.EasingStyle.Linear))
 		local a = Flux.Tween(0, TweenInfo.new(0, Enum.EasingStyle.Linear))

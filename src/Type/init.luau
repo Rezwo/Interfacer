@@ -150,6 +150,170 @@ export type function Merge(Base : type, Extra : type)
 	return Result
 end
 
+export type function MergeTables(First : type, Second : type, Third : type, Fourth : type) : type
+	local Result = types.newtable()
+
+	local function CanBeNil(SourceType : type) : boolean
+		if SourceType:is("nil") then
+			return true
+		elseif SourceType:is("union") then
+			for _, Part in SourceType:components() do
+				if Part:is("nil") then
+					return true
+				end
+			end
+		end
+		return false
+	end
+
+	local function StripNil(SourceType : type) : type
+		if SourceType:is("nil") then
+			return types.never
+		elseif not SourceType:is("union") then
+			return SourceType
+		end
+		local Parts = {}
+		for _, Part in SourceType:components() do
+			if not Part:is("nil") then
+				table.insert(Parts, Part)
+			end
+		end
+		return if #Parts == 0 then types.never elseif #Parts == 1 then Parts[1] else types.unionof(table.unpack(Parts))
+	end
+
+	local function Combine(FirstType : type, SecondType : type) : type
+		local Parts : { type } = {}
+		local function Add(ValueType : type)
+			if ValueType:is("never") then
+				return
+			elseif ValueType:is("union") then
+				for _, Part in ValueType:components() do
+					Add(Part)
+				end
+			elseif not table.find(Parts, ValueType) then
+				table.insert(Parts, ValueType)
+			end
+		end
+		Add(FirstType)
+		Add(SecondType)
+		return if #Parts == 0 then types.never elseif #Parts == 1 then Parts[1] else types.unionof(table.unpack(Parts))
+	end
+
+	local function MergeProperty(PreviousType : type?, NextType : type, SourceOptional : boolean) : type
+		if PreviousType == nil then
+			return if SourceOptional then types.optional(NextType) else NextType
+		elseif not SourceOptional and not CanBeNil(NextType) then
+			return NextType
+		end
+		return Combine(PreviousType, StripNil(NextType))
+	end
+
+	local function MergeInto(Target : type, Source : type, SourceOptional : boolean)
+		if Source:is("nil") then
+			return
+		elseif Source:is("union") then
+			local NonNil = {}
+			local HasNil = false
+			for _, Part in Source:components() do
+				if Part:is("nil") then
+					HasNil = true
+				else
+					table.insert(NonNil, Part)
+				end
+			end
+			local BranchOptional = SourceOptional or HasNil
+			if #NonNil == 0 then
+				return
+			elseif #NonNil == 1 then
+				MergeInto(Target, NonNil[1], BranchOptional)
+				return
+			end
+			local BranchTables : { type } = {}
+			local KeysByName : { [any] : type } = {}
+			for _, Part in NonNil do
+				local Branch = types.newtable()
+				MergeInto(Branch, Part, false)
+				table.insert(BranchTables, Branch)
+				for Key in Branch:properties() do
+					local Name = Key:value()
+					if Name ~= nil and KeysByName[Name] == nil then
+						KeysByName[Name] = Key
+					end
+				end
+			end
+			for _, Key in KeysByName do
+				local CombinedType : type? = nil
+				local AllPresentAndNonNil = true
+				for _, Branch in BranchTables do
+					local Value = Branch:readproperty(Key)
+					if Value == nil then
+						AllPresentAndNonNil = false
+					else
+						if CanBeNil(Value) then
+							AllPresentAndNonNil = false
+						end
+						local StrippedType = StripNil(Value)
+						CombinedType = if CombinedType == nil then StrippedType else Combine(CombinedType, StrippedType)
+					end
+				end
+				if CombinedType ~= nil then
+					local PropertyOptional = BranchOptional or not AllPresentAndNonNil
+					Target:setreadproperty(Key, MergeProperty(Target:readproperty(Key), CombinedType, PropertyOptional))
+				end
+			end
+			local IndexerKey : type? = nil
+			local IndexerValue : type? = nil
+			local AllHaveIndexer = true
+			for _, Branch in BranchTables do
+				local BranchIndexer = Branch:indexer()
+				if BranchIndexer == nil then
+					AllHaveIndexer = false
+				else
+					IndexerKey = if IndexerKey == nil then BranchIndexer.index else Combine(IndexerKey, BranchIndexer.index)
+					IndexerValue = if IndexerValue == nil then BranchIndexer.readresult else Combine(IndexerValue, BranchIndexer.readresult)
+				end
+			end
+			if IndexerKey ~= nil and IndexerValue ~= nil then
+				local FinalValueType = if BranchOptional or not AllHaveIndexer then types.optional(IndexerValue) else IndexerValue
+				Target:setindexer(IndexerKey, FinalValueType)
+			end
+			return
+		elseif Source:is("intersection") then
+			for _, Part in Source:components() do
+				MergeInto(Target, Part, SourceOptional)
+			end
+			return
+		elseif not Source:is("table") then
+			return
+		end
+		for Key, Property in Source:properties() do
+			local Value = Property.read or Property.write
+			if Value then
+				Target:setreadproperty(Key, MergeProperty(Target:readproperty(Key), Value, SourceOptional))
+			end
+		end
+		local Indexer = Source:indexer()
+		if Indexer then
+			local IndexerValue = if SourceOptional then types.optional(Indexer.readresult) else Indexer.readresult
+			local CurrentIndexer = Target:indexer()
+			if CurrentIndexer then
+				Target:setindexer(Combine(CurrentIndexer.index, Indexer.index), Combine(CurrentIndexer.readresult, IndexerValue))
+			else
+				Target:setindexer(Indexer.index, IndexerValue)
+			end
+		end
+	end
+
+	MergeInto(Result, First, false)
+	MergeInto(Result, Second, false)
+	MergeInto(Result, Third, false)
+	MergeInto(Result, Fourth, false)
+	if Result:indexer() == nil then
+		Result:setindexer(types.number, types.any)
+	end
+	return Result
+end
+
 export type function EditProperties(InstanceType : type?)
 	return Properties(InstanceType)
 end
