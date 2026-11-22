@@ -1076,9 +1076,88 @@ const function Settle(GraphRecord : any)
 	end
 end
 
-local Refresh : (any) -> ()
+local Refresh : (any, number?) -> ()
+local IterativeRefreshDepth = 128
 
-const function RefreshDormantComputation(GraphRecord : any)
+const function RefreshDormantIteratively(RootRecord : any)
+	local Records : { any } = { RootRecord }
+	local SourceIndices : { number } = { FirstSourceSlot }
+	local WaitingSources : { any } = {}
+	local Stamps : { number } = { RootRecord[StampSlot] }
+	local SourceEnds : { number } = { RootRecord[SourceEndSlot] }
+	local ActiveRecords : { [any] : boolean } = { [RootRecord] = true }
+	local StackDepth = 1
+
+	while StackDepth > 0 do
+		local GraphRecord = Records[StackDepth]
+		local SourceIndex = SourceIndices[StackDepth]
+		local Stamp = Stamps[StackDepth]
+		local Dirty = Stamp <= 0 or SourceIndex < 0
+		local Pushed = false
+		local WaitingSource = WaitingSources[StackDepth]
+		if WaitingSource then
+			WaitingSources[StackDepth] = nil
+			if not Dirty then
+				local Changed = WaitingSource[ChangedSlot]
+				Dirty = Changed == nil or Changed > Stamp
+				SourceIndex += 2
+			end
+		end
+		while not Dirty and SourceIndex < SourceEnds[StackDepth] do
+			local SourceRecord = GraphRecord[SourceIndex]
+			local SourceStamp = SourceRecord[StampSlot]
+			local IsStale = SourceStamp == StaleStamp
+			if IsStale or (
+				SourceRecord[HeightSlot]
+				and SourceStamp > MaximumLiveHeightLimit
+				and SourceStamp ~= Epoch
+				and SourceStamp ~= ErroredStamp
+			) then
+				if not SourceRecord[ObserversSlot] and SourceRecord[CalculationSlot] then
+					if ActiveRecords[SourceRecord] then
+						error("[Flux] cyclic dormant computation dependency", 0)
+					end
+					SourceIndices[StackDepth] = if IsStale then -SourceIndex else SourceIndex
+					WaitingSources[StackDepth] = SourceRecord
+					StackDepth += 1
+					Records[StackDepth] = SourceRecord
+					Stamps[StackDepth] = SourceRecord[StampSlot]
+					SourceEnds[StackDepth] = SourceRecord[SourceEndSlot]
+					SourceIndices[StackDepth] = FirstSourceSlot
+					ActiveRecords[SourceRecord] = true
+					Pushed = true
+					break
+				end
+				Refresh(SourceRecord)
+				if IsStale then
+					Dirty = true
+					break
+				end
+			end
+			local Changed = SourceRecord[ChangedSlot]
+			Dirty = Changed == nil or Changed > Stamp
+			SourceIndex += 2
+		end
+
+		if not Pushed then
+			ActiveRecords[GraphRecord] = nil
+			Records[StackDepth] = nil
+			StackDepth -= 1
+			if Dirty then
+				RunComputed(GraphRecord)
+			else
+				GraphRecord[StampSlot] = Epoch
+			end
+		end
+	end
+end
+
+const function RefreshDormantComputation(GraphRecord : any, Depth : number?)
+	local CurrentDepth = Depth or 0
+	if CurrentDepth >= IterativeRefreshDepth then
+		RefreshDormantIteratively(GraphRecord)
+		return
+	end
 	local Stamp = GraphRecord[StampSlot]
 	local Dirty = Stamp <= 0
 	if not Dirty then
@@ -1086,7 +1165,7 @@ const function RefreshDormantComputation(GraphRecord : any)
 			local SourceRecord = GraphRecord[IndexValue]
 			local StampValue = SourceRecord[StampSlot]
 			if StampValue == StaleStamp then
-				Refresh(SourceRecord)
+				Refresh(SourceRecord, CurrentDepth + 1)
 				Dirty = true
 				break
 			elseif
@@ -1095,7 +1174,7 @@ const function RefreshDormantComputation(GraphRecord : any)
 				and StampValue ~= Epoch
 				and StampValue ~= ErroredStamp
 			then
-				Refresh(SourceRecord)
+				Refresh(SourceRecord, CurrentDepth + 1)
 			end
 			local ChildRecord = SourceRecord[ChangedSlot]
 			if ChildRecord == nil or ChildRecord > Stamp then
@@ -1111,7 +1190,7 @@ const function RefreshDormantComputation(GraphRecord : any)
 	end
 end
 
-function Refresh(GraphRecord : any)
+function Refresh(GraphRecord : any, Depth : number?)
 	if GraphRecord[ObserversSlot] then
 		local StampValue = GraphRecord[StampSlot]
 		if StampValue == DeferredStamp then
@@ -1125,7 +1204,7 @@ function Refresh(GraphRecord : any)
 			GraphRecord[StampSlot] = GraphRecord[HeightSlot] + LiveStampBase
 		end
 	elseif GraphRecord[CalculationSlot] then
-		RefreshDormantComputation(GraphRecord)
+		RefreshDormantComputation(GraphRecord, Depth)
 	end
 end
 
@@ -2907,7 +2986,7 @@ const function WrapComputedEquals(
 end
 
 const function CreateComputed<ValueType>(
-	Callback : () -> ValueType,
+	Callback : (() -> ValueType) | ((PreviousValue : ValueType?) -> ValueType),
 	Equality : ((ValueType, ValueType) -> boolean)?
 ) : Node<ValueType>
 	local GraphRecord =
@@ -3133,20 +3212,29 @@ local function CreateNode<ValueType>(
 	return CreateState(Object, Equality)
 end
 
+type function SafeValue(ValueType : type)
+	return ValueType
+end
+
+type SafeFallback<ValueType> = SafeValue<ValueType>
+	| ((Failure : unknown) -> ValueType)
+	| ((Failure : unknown, Reset : () -> ()) -> ValueType)
+
 local RunSafely : <ValueType>(
 	AttemptCallback : () -> ValueType,
-	Fallback : ValueType | (Failure : unknown) -> ValueType,
+	Fallback : SafeFallback<ValueType>,
 	Equality : ((FirstValue : ValueType, SecondValue : ValueType) -> boolean)?
 ) -> Node<ValueType>
 do
 	local function RecoverSafe<ValueType>(
-		Handler : (Failure : unknown) -> ValueType,
-		Failure : unknown
+		Handler : (Failure : unknown, Reset : () -> ()) -> ValueType,
+		Failure : unknown,
+		Reset : () -> ()
 	) : ValueType
 		local Count, SourceRecord, SourceRun =
 			CurrentComputationRecord, SuspendedComputationRecord, SuspendedEvaluationRun
 		CurrentComputationRecord, SuspendedComputationRecord = nil, nil
-		local Passed, Result = pcall(Handler, Failure)
+		local Passed, Result = pcall(Handler, Failure, Reset)
 		CurrentComputationRecord, SuspendedComputationRecord, SuspendedEvaluationRun =
 			Count, SourceRecord, SourceRun
 		if not Passed then
@@ -3157,18 +3245,40 @@ do
 
 	function RunSafely<ValueType>(
 		AttemptCallback : () -> ValueType,
-		Fallback : ValueType | (Failure : unknown) -> ValueType,
+		Fallback : SafeFallback<ValueType>,
 		Equality : ((FirstValue : ValueType, SecondValue : ValueType) -> boolean)?
 	) : Node<ValueType>
+		local RetryState : State<number>? = nil
+		local function Reset()
+			local CurrentRetryState = RetryState
+			if CurrentRetryState ~= nil then
+				CurrentRetryState:Update()
+			end
+		end
 		return CreateComputed(function()
+			local Record = CurrentComputationRecord
 			local Passed, Result = pcall(AttemptCallback)
 			if Passed then
 				return Result
 			end
 			if type(Fallback) == "function" then
-				return RecoverSafe(Fallback :: any, Result)
+				if Record and Record[CalculationSlot] then
+					local CurrentRetryState = RetryState
+					if CurrentRetryState == nil then
+						local NewRetryState = CreateState(0)
+						RetryState = NewRetryState
+						RegisterDestructionCallback(Record, function()
+							RetryState = nil
+							NewRetryState:Destroy()
+						end)
+						NewRetryState:Get()
+					else
+						CurrentRetryState:Get()
+					end
+				end
+				return RecoverSafe(Fallback :: any, Result, Reset)
 			end
-			return Fallback
+			return Fallback :: ValueType
 		end, Equality)
 	end
 end

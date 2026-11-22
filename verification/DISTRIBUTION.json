@@ -16,7 +16,7 @@
     "NOTICE.md": "3ff173e7d8726478889d24f71948918b61e445f3ee7f61b2e02fcad2118c359a",
     "README.md": "ab72a49ea139c915c1008e5c83e9354c170c63e2bb3ccfd9b789aef05e270076",
     "default.project.json": "f11044afea9fd67d8dfbfa2b462f78959a5f64908f47050b11b5b80e98b79d2b",
-    "dist/Interfacer.rbxm": "5365a75b6b309517f977dfdc8cdce0fabbfd4b894b00698f5dde63c6519834b9",
+    "dist/Interfacer.rbxm": "090a5aae46c8ea5bce001a40030fe5ee7552cac8ef12ed7c6584df13cbac3cde",
     "src/Asynchronous.luau": "3ac89f0e55a5f2fb4566422c689b8da5170b9e8fd5cc1ed89527bf94aaea2891",
     "src/Bind.luau": "5202138ad135c5c59394a0858e72e473b5d8accaa4a2d02af3b1f96e43203161",
     "src/Clock.luau": "770abc14b3461520791048ea3e204d2c22c81eac5653e0f663490f9299fa8622",
@@ -25,7 +25,7 @@
     "src/Dialog.luau": "7b5e226f1e48fd966b5d54220b2f37200f45e75b5be285315b9a3c4267641a30",
     "src/Edit.luau": "572ef63dc0f04483be48728d686fb6ce23d791e50f06c51d788e1a54daab1966",
     "src/ExitVisual.luau": "442c080d6bb880a7b42ca30bde4cdae39ec6b5713adff6ba2cec774a4891a5e8",
-    "src/Graph.luau": "f1746cdffabc7e809bc510de9525dc205e0c82321f57e283dda254e4ff604ec8",
+    "src/Graph.luau": "a2eab6ecda2fd3c6e8542ee05c86672e9d040a34cf9602143e97ea5cbec6f83b",
     "src/Interact.luau": "0920f0edda7c77efbfda966544514c4e06046f7df45d4da22a945da852939705",
     "src/Layout.luau": "bea0b297993e52ea1ae1341a7bc0eb52b0df7eee77431d1b8028705aa3435e6b",
     "src/Motion.luau": "12d5db875faf6aec88c28e9563bfcac9fb1976dc0f705add70f6ea23954891cd",
@@ -73,9 +73,10 @@
     "verification/CheckStyle.py": "3ebbebba01659a4a7bdd0b3d7a4c57a1815c3b6701aa795c7ccb8fbfa32a2996",
     "verification/CoreCounts.luau": "78a1b6c3a1b35e9f9aa1e8a681970ab88d1e377cd3ea1821d7c366727ec0f40c",
     "verification/EXPORT_AUDIT.json": "1fbb3998765ef514253f28f1ad6f7cbae913a30de270a048265e99fc7e948397",
-    "verification/FLUX_V052_PORT.md": "20f67cc214ebb0d555cceb49ca1b0b837c273ca28905e531ab19b8469155c017",
+    "verification/FLUX_V052_PORT.md": "182d6a40abd0b797229d7d8a96bc7ba7c8c45aee6e6f9460af70ee880112e23f",
     "verification/FluxV052Async.luau": "8f1213a252fb3ac1c08fd09c518ad40aea93ea0782e67155eaa7aa7e5b8a8db7",
     "verification/FluxV052ClockMotion.luau": "4fa60f60ddc66f6f34cb04d370d6e663a1e3a8316d7664c8d7d95e9a35252235",
+    "verification/FluxV052Graph.luau": "98a2eaac8ab37fa946a47317405380416392bccd70c4b0976c9c2abd7a373ac6",
     "verification/FluxV052Mapping.luau": "4f4b92b2ae094651268b53523b8bc32fe3b890a4e6fecbb580492edb866b7d20",
     "verification/FluxV052Merge.luau": "933eaa369843e6b22f10443816df4dc21354ce42e8f055b74864a4e4f645377f",
     "verification/FluxV052Mount.luau": "0143fa458ba17acacb3f2af0fd8f2a085c971111c9b4221e7cd224f159b93da6",
@@ -84,8 +85,8 @@
     "verification/FluxV052TypedUI.luau": "d7212430f4cf8a241ea8f3e213cb9a89540bcca6c72b1adc041f864c0b5fe9a5",
     "verification/FrozenWorkload.luau": "a3d7976806680d653f64610cf447379ce6d5dc4f3dce14025664ae305c1bbf7f",
     "verification/HEADLESS.json": "57aa2dc7ebec278583eb5d148efc3c14f059d665c5298c9a7e0d1cf491248f57",
-    "verification/SOURCE_IDENTITIES.json": "45428f0757780849ebc4ae151399d8d154f5580fbea26dbd6ccc25852b81f304",
+    "verification/SOURCE_IDENTITIES.json": "d3a144efa01a7d2cef99e78d5ca571bfecd5402021a52616dc21c176e8d886b3",
     "verification/STYLE_CLEANUP.json": "613c83846becc553e529f531878b08d55c20fa68a2d9b5a6eeb01e2d1991a746",
-    "verify_distribution.py": "1904e2f2a2d74933ca9efc6a9c877e86510f89c5e5326d34d0dbcb02f543814d"
+    "verify_distribution.py": "cb7068a79132424ae3dd2dfe1154027f9d35cbb8f117b9dcc3da63e6a1edc3b8"
   }
 }

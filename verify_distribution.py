@@ -34,6 +34,7 @@ def main():
     for script, required in [
         ("test/spec.client.luau", ["255 passed", "0 failed", "82 skipped"]),
         ("verification/CoreCounts.luau", ["COUNTS PASS: 9"]),
+        ("verification/FluxV052Graph.luau", ["DEEP DORMANT PASS", "COMPUTED PREVIOUS AND SAFE RESET PASS", "DYNAMIC DEPENDENCIES AND DISPOSAL PASS"]),
         ("verification/FluxV052Mapping.luau", ["FLUX V052 MAPPING PASS"]),
         ("verification/FluxV052Signals.luau", ["FLUX V052 SIGNALS PASS"]),
         ("verification/FluxV052Async.luau", ["FLUX V052 ASYNC PASS"]),
