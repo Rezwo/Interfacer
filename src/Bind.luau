@@ -589,7 +589,17 @@ function Bind.Node(Object : any, Second : string?) : Graph.Node<any>
 	return CreateNode(Object)
 end
 
-function Bind.On<DependencyType, ResultType>(
+type OnFunction = <DependencyType, ResultType>(
+	Dependencies : DependencyType,
+	Callback : (
+		Input : Type.OnInput<DependencyType>,
+		PreviousInput : Type.OnInput<DependencyType>?,
+		PreviousResult : ResultType?
+	) -> ResultType,
+	Defer : boolean?
+) -> (PreviousResult : ResultType?) -> ResultType?
+
+const function CreateDependencyCallback<ResultType>(
 	Dependencies : any,
 	Callback : (
 		Input : any,
@@ -598,7 +608,10 @@ function Bind.On<DependencyType, ResultType>(
 	) -> ResultType,
 	Defer : boolean?
 ) : (PreviousResult : ResultType?) -> ResultType?
-	local IsArray = type(Dependencies) == "table" and not IsReactiveNode(Dependencies)
+	local IsArray = type(Dependencies) == "table"
+		and not IsReactiveNode(Dependencies)
+		and getmetatable(Dependencies) == nil
+		and (rawget(Dependencies, 1) ~= nil or next(Dependencies) == nil)
 	local Count = if IsArray then #(Dependencies :: { any }) else 0
 	local PreviousInput : any = nil
 
@@ -627,6 +640,8 @@ function Bind.On<DependencyType, ResultType>(
 		return Result
 	end
 end
+
+Bind.On = CreateDependencyCallback :: OnFunction
 
 function Bind.To<ValueType>(
 	Record : Graph.Node<ValueType>,

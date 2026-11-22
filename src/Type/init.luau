@@ -20,6 +20,135 @@ type GraphNode = Graph.Node<any>
 export type Child = Instance | GraphNode | ((InstanceType : Instance) -> ()) | { [any] : any }
 export type Children = { Child }
 
+export type DefaultProp<ValueType> = { read DefaultValue : ValueType }
+
+export type function MergeOwn(First : type, Second : type, Third : type, Fourth : type) : type
+	local Result = types.newtable()
+	local function Add(Source : type)
+		if Source:is("nil") then
+			return
+		elseif Source:is("union") then
+			for _, Part in Source:components() do
+				if not Part:is("nil") then
+					Add(Part)
+				end
+			end
+			return
+		elseif Source:is("intersection") then
+			for _, Part in Source:components() do
+				Add(Part)
+			end
+			return
+		elseif not Source:is("table") then
+			return
+		end
+		for Key, Property in Source:properties() do
+			local Value = Property.read or Property.write
+			if Value then
+				Result:setreadproperty(Key, Value)
+			end
+		end
+		local Indexer = Source:indexer()
+		if Indexer then
+			Result:setindexer(Indexer.index, Indexer.readresult)
+		end
+	end
+	Add(First)
+	Add(Second)
+	Add(Third)
+	Add(Fourth)
+	return Result
+end
+
+export type function OnInput(Dependencies : type) : type
+	local function Returned(Callback : type) : type
+		local Head = Callback:returns().head
+		return if Head and Head[1] then Head[1] else types.singleton(nil)
+	end
+
+	local function NodeValue(ValueType : type) : type?
+		if not ValueType:is("table") then
+			return nil
+		end
+		local ReadHandle = ValueType:readproperty(types.singleton("Get"))
+		if ReadHandle and ReadHandle:is("function") and ValueType:readproperty(types.singleton("Peek")) then
+			return Returned(ReadHandle)
+		end
+		return nil
+	end
+
+	local function UnwrapValue(ValueType : type) : type
+		if ValueType:is("any") then
+			return types.any
+		elseif ValueType:is("union") then
+			local Parts : { type } = {}
+			local function Add(Part : type)
+				if Part:is("union") then
+					for _, Member in Part:components() do
+						Add(Member)
+					end
+				elseif not table.find(Parts, Part) then
+					table.insert(Parts, Part)
+				end
+			end
+			for _, Part in ValueType:components() do
+				Add(UnwrapValue(Part))
+			end
+			return if #Parts == 1 then Parts[1] else types.unionof(table.unpack(Parts))
+		elseif ValueType:is("intersection") then
+			for _, Part in ValueType:components() do
+				local Found = NodeValue(Part)
+				if Found then
+					return Found
+				end
+			end
+			return ValueType
+		elseif ValueType:is("function") then
+			return Returned(ValueType)
+		end
+		return NodeValue(ValueType) or ValueType
+	end
+
+	local function Resolve(ValueType : type) : type
+		if ValueType:is("any") then
+			return types.any
+		elseif ValueType:is("union") then
+			local Parts : { type } = {}
+			for _, Part in ValueType:components() do
+				local Resolved = Resolve(Part)
+				if not table.find(Parts, Resolved) then
+					table.insert(Parts, Resolved)
+				end
+			end
+			return if #Parts == 1 then Parts[1] else types.unionof(table.unpack(Parts))
+		elseif ValueType:is("intersection") then
+			for _, Part in ValueType:components() do
+				local Found = NodeValue(Part)
+				if Found then
+					return Found
+				end
+			end
+			return ValueType
+		elseif ValueType:is("function") then
+			return Returned(ValueType)
+		elseif ValueType:is("table") then
+			local Found = NodeValue(ValueType)
+			if Found then
+				return Found
+			end
+			local Indexer = ValueType:indexer()
+			if Indexer and Indexer.readresult and Indexer.index:is("number") then
+				local Element = UnwrapValue(Indexer.readresult)
+				return types.newtable(nil, { index = types.number, readresult = Element, writeresult = Element })
+			end
+			return ValueType
+		end
+		return ValueType
+	end
+
+	return Resolve(Dependencies)
+end
+
 export type function Properties(InstanceType : type?)
 	local IndexType = types.unionof(types.number, types.string)
 	local Result =

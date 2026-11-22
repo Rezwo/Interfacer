@@ -271,8 +271,51 @@ type function GroupKeys(Group : type) : type
 	return Keys
 end
 
+type function ReadSchemaDefault(Group : type, Key : type) : type?
+	if Group:is("table") then
+		local Spec = Group:readproperty(Key)
+		return if Spec and Spec:is("table") then Spec:readproperty(types.singleton("DefaultValue")) else nil
+	end
+	return nil
+end
+
+type function WithSchemaDefault(ValueType : type?, DefaultType : type) : type
+	if ValueType == nil or ValueType:is("nil") then
+		return DefaultType
+	elseif not ValueType:is("union") then
+		return ValueType
+	end
+	local Members = {}
+	local HasNil = false
+	for _, Member in ValueType:components() do
+		if Member:is("nil") then
+			HasNil = true
+		else
+			table.insert(Members, Member)
+		end
+	end
+	if not HasNil then
+		return ValueType
+	end
+	if not table.find(Members, DefaultType) then
+		table.insert(Members, DefaultType)
+	end
+	return if #Members == 1 then Members[1] else types.unionof(table.unpack(Members))
+end
+
 type function PickWhere(PropertyValues : type, Group : type, Prior : type, InGroup : type) : type
-	if not PropertyValues:is("table") then
+	if PropertyValues:is("union") then
+		local Members = {}
+		for _, Member in PropertyValues:components() do
+			local Properties = PickWhere(Member, Group, Prior, InGroup)
+			if not table.find(Members, Properties) then
+				table.insert(Members, Properties)
+			end
+		end
+		return if #Members == 1 then Members[1] else types.unionof(table.unpack(Members))
+	elseif PropertyValues:is("nil") then
+		PropertyValues = types.newtable()
+	elseif not PropertyValues:is("table") then
 		return PropertyValues
 	end
 	local Wanted, Excluded = GroupKeys(Group), GroupKeys(Prior)
@@ -288,7 +331,18 @@ type function PickWhere(PropertyValues : type, Group : type, Prior : type, InGro
 		local ValueType = Property.read or Property.write
 		local InWanted = Has(Wanted, PropertyKey)
 		if ValueType and not Has(Excluded, PropertyKey) and InWanted ~= WantAll then
-			Result:setproperty(PropertyKey, ValueType)
+			local DefaultType = if InWanted and not WantAll then ReadSchemaDefault(Group, PropertyKey) else nil
+			Result:setproperty(PropertyKey, if DefaultType then WithSchemaDefault(ValueType, DefaultType) else ValueType)
+		end
+	end
+	if not WantAll then
+		for PropertyKey in Wanted:properties() do
+			if not Has(Excluded, PropertyKey) and Result:readproperty(PropertyKey) == nil then
+				local DefaultType = ReadSchemaDefault(Group, PropertyKey)
+				if DefaultType then
+					Result:setproperty(PropertyKey, DefaultType)
+				end
+			end
 		end
 	end
 	local Indexer = PropertyValues:indexer()
@@ -302,12 +356,70 @@ export type Pick<ValueType, PropertyGroupType> = PickWhere<ValueType, PropertyGr
 
 export type Omit<ValueType, PropertyGroupType> = PickWhere<ValueType, nil, PropertyGroupType, false>
 
+const DefaultPropertyMarker = table.freeze({})
+
+const function DefineProperty(DefaultValue : any?) : any
+	if DefaultValue == nil then
+		return true
+	end
+	return table.freeze({ DefaultPropertyMarker, DefaultValue = DefaultValue })
+end
+
+const function DefineOwnedProperties(... : { [string] : any }?) : any
+	local Schema = {}
+	for Index = 1, select("#", ...) do
+		local Group = select(Index, ...)
+		if Group ~= nil then
+			assert(type(Group) == "table", "Own expects tables or nil")
+			for Key, Value in Group do
+				Schema[Key] = Value
+			end
+		end
+	end
+	return table.freeze(Schema)
+end
+
+const function IsPropertyKeyList(Group : { [any] : any }) : boolean
+	local First = Group[1]
+	return First ~= nil and First ~= true and (type(First) ~= "table" or rawget(First, 1) ~= DefaultPropertyMarker)
+end
+
+const function ClonePropertyDefault(Value : any, Copies : { [any] : any }) : any
+	if type(Value) ~= "table" or getmetatable(Value) ~= nil or table.isfrozen(Value) then
+		return Value
+	end
+	local Previous = Copies[Value]
+	if Previous ~= nil then
+		return Previous
+	end
+	local Copy = table.clone(Value)
+	Copies[Value] = Copy
+	for Key, Entry in Copy do
+		Copy[Key] = ClonePropertyDefault(Entry, Copies)
+	end
+	return Copy
+end
+
+const function ApplyPropertyDefaults(Owned : { [any] : any }, Schema : { [any] : any }, Owners : { [any] : number }?, GroupIndex : number?)
+	for Key, Property in Schema do
+		if (Owners == nil or Owners[Key] == GroupIndex)
+			and Owned[Key] == nil and type(Property) == "table" and rawget(Property, 1) == DefaultPropertyMarker then
+			Owned[Key] = ClonePropertyDefault(rawget(Property, "DefaultValue"), {})
+		end
+	end
+end
+
+type PropertyDefinition = ((DefaultValue : nil?) -> boolean) & (<ValueType>(DefaultValue : ValueType) -> Type.DefaultProp<ValueType>)
+type OwnedPropertySchema = <First, Second, Third, Fourth>(
+	First : (First & {})?, Second : (Second & {})?, Third : (Third & {})?, Fourth : (Fourth & {})?
+) -> Type.MergeOwn<First, Second, Third, Fourth>
+
 const function SplitProperties(Properties : any, Keys : any, ... : any) : ...any
 	if select("#", ...) == 0 then
 		local Own = {}
 		local Rest = {}
 		if type(Properties) == "table" then
-			if Keys[1] ~= nil then
+			if IsPropertyKeyList(Keys) then
 				for _, PropertyKey in Keys do
 					local PropertyValue = Properties[PropertyKey]
 					if PropertyValue ~= nil then
@@ -326,6 +438,9 @@ const function SplitProperties(Properties : any, Keys : any, ... : any) : ...any
 				end
 			end
 		end
+		if not IsPropertyKeyList(Keys) then
+			ApplyPropertyDefaults(Own, Keys)
+		end
 		return Own, Rest
 	end
 
@@ -334,19 +449,19 @@ const function SplitProperties(Properties : any, Keys : any, ... : any) : ...any
 	local Owners : { [any] : number } = {}
 	local Results : { { [any] : any } } = {}
 
-	for index = 1, Count do
-		Results[index] = {}
-		local Group = Groups[index]
-		if Group[1] ~= nil then
+	for Index = 1, Count do
+		Results[Index] = {}
+		local Group = Groups[Index]
+		if IsPropertyKeyList(Group) then
 			for _, PropertyKey in Group do
 				if Owners[PropertyKey] == nil then
-					Owners[PropertyKey] = index
+					Owners[PropertyKey] = Index
 				end
 			end
 		else
 			for PropertyKey in Group do
 				if Owners[PropertyKey] == nil then
-					Owners[PropertyKey] = index
+					Owners[PropertyKey] = Index
 				end
 			end
 		end
@@ -362,12 +477,18 @@ const function SplitProperties(Properties : any, Keys : any, ... : any) : ...any
 		end
 	end
 
+	for Index = 1, Count do
+		local Group = Groups[Index]
+		if not IsPropertyKeyList(Group) then
+			ApplyPropertyDefaults(Results[Index], Group, Owners, Index)
+		end
+	end
 	return table.unpack(Results :: any, 1, Count + 1)
 end
 
 type Split =
 	(<ValueType, PropertyGroupType>(
-		Properties : ValueType?,
+		Properties : ValueType,
 		Keys : PropertyGroupType
 	) -> (Pick<ValueType, PropertyGroupType>, Omit<ValueType, PropertyGroupType>))
 	& (<ValueType>(
@@ -1203,4 +1324,6 @@ return table.freeze({
 	Find = Find,
 
 	Split = SplitProperties :: Split,
+	Prop = DefineProperty :: PropertyDefinition,
+	Own = DefineOwnedProperties :: OwnedPropertySchema,
 })

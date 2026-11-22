@@ -38,6 +38,7 @@ export type Portal = Overlay.Portal
 export type Modal = Overlay.Modal
 export type ModalStack = Overlay.ModalStack
 export type Owner = Graph.Owner
+export type DefaultProp<ValueType> = Type.DefaultProp<ValueType>
 export type Cleanable = Graph.Cleanable
 
 export type Properties<ClassName, Extra = {}> = Type.Merge<
@@ -205,6 +206,8 @@ local Interfacer = {
 	Selector = Conditional.Selector,
 	CreateStore = Store.New,
 	Split = Edit.Split,
+	Prop = Edit.Prop,
+	Own = Edit.Own,
 	Merge = Edit.Merge,
 	Mount = Edit.Mount,
 	Safe = Graph.Safe,
