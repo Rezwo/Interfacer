@@ -205,4 +205,35 @@ test("responsive · scaleOf clamps zero reference dimensions to 1 to avoid NaN/i
 	s:Destroy()
 end)
 
+test("responsive · missing container measurements use the live viewport", function()
+	local Vector2 = if IS_ROBLOX then Vector2 else require("../../src/Compatibility").Vector2
+	local PreviousViewport = Responsive.Viewport:Peek()
+	Responsive.Viewport:Set(Vector2.new(960, 540))
+	local Container = Flux(nil)
+	local Configuration = {
+		Viewport = function()
+			return Container()
+		end,
+		Reference = Vector2.new(960, 540),
+	}
+	local Scale = Responsive.ScaleOf(Configuration)
+	local Breakpoint = Responsive.BreakpointOf(Configuration)
+	local Passed, Problem = pcall(function()
+		expect(Scale:Get() == 1 and Breakpoint:Get() == "Tablet", "use global size before publication")
+		Responsive.Viewport:Set(Vector2.new(1920, 1080))
+		expect(Scale:Get() == 2 and Breakpoint:Get() == "Desktop", "track global size while unavailable")
+		Container(Vector2.new(480, 270))
+		expect(Scale:Get() == 0.5 and Breakpoint:Get() == "Phone", "use the measured size")
+		Responsive.Viewport:Set(Vector2.new(960, 540))
+		expect(Scale:Get() == 0.5 and Breakpoint:Get() == "Phone", "ignore unrelated viewport changes")
+		Container:Set(nil)
+		expect(Scale:Get() == 1 and Breakpoint:Get() == "Tablet", "resume tracking global size")
+	end)
+	Scale:Destroy()
+	Breakpoint:Destroy()
+	Container:Destroy()
+	Responsive.Viewport:Set(PreviousViewport)
+	assert(Passed, Problem)
+end)
+
 return {}

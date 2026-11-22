@@ -246,11 +246,18 @@ const function CornerProperty(
 	HorizontalMode : string
 ) : any
 	local Entries = Sides :: any
-	local Value = Entries[CreateCorner]
-		or Entries[VerticalMode]
-		or Entries[HorizontalMode]
-		or Sides.Radius
-	return DimensionProperty(if Value == nil then 8 else Value)
+	local Corner, Vertical, Horizontal, Radius =
+		Entries[CreateCorner], Entries[VerticalMode], Entries[HorizontalMode], Sides.Radius
+	if IsDynamicValue(Corner) or IsDynamicValue(Vertical) or IsDynamicValue(Horizontal) or IsDynamicValue(Radius) then
+		return function()
+			local Value = ReadReactiveValue(Corner)
+				or ReadReactiveValue(Vertical)
+				or ReadReactiveValue(Horizontal)
+				or ReadReactiveValue(Radius)
+			return ToDimension(if Value == nil then 8 else Value)
+		end
+	end
+	return ToDimension(Corner or Vertical or Horizontal or Radius or 8)
 end
 
 const function Spread(Values : { any }, Keypoint : any, Sequence : any) : any

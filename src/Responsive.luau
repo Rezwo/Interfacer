@@ -32,7 +32,7 @@ export type PartialConfiguration = {
 	Minimum : number?,
 	Maximum : number?,
 	Breakpoints : Breakpoints?,
-	Viewport : Graph.Reactive<Vector2>?,
+	Viewport : (Graph.Reactive<Vector2> | Graph.Node<Vector2?> | (() -> Vector2?))?,
 }
 
 local DefaultViewportSize = Compatibility.Vector2.new(1920, 1080)
@@ -96,18 +96,18 @@ local ViewportState : Graph.Node<Vector2> = CreateState(DefaultViewportSize)
 
 const function CreateScale(Partial : PartialConfiguration?) : Graph.Node<number>
 	local Configuration = Partial or EmptyConfiguration
-	local Source = Configuration.Viewport or ViewportState
+	local Source = Configuration.Viewport
 	return CreateComputed(function() : number
-		local ViewportSize = ReadReactiveValue(Source) :: Vector2
+		local ViewportSize = (if Source ~= nil then ReadReactiveValue(Source) else nil) or ViewportState:Get()
 		return ScaleFor(ViewportSize.X, ViewportSize.Y, Configuration)
 	end)
 end
 
 const function CreateBreakpoint(Partial : PartialConfiguration?) : Graph.Node<Breakpoint>
 	local Configuration = Partial or EmptyConfiguration
-	local Source = Configuration.Viewport or ViewportState
+	local Source = Configuration.Viewport
 	return CreateComputed(function() : Breakpoint
-		local ViewportSize = ReadReactiveValue(Source) :: Vector2
+		local ViewportSize = (if Source ~= nil then ReadReactiveValue(Source) else nil) or ViewportState:Get()
 		return BreakpointFor(ViewportSize.X, Configuration)
 	end)
 end

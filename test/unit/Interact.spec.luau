@@ -382,4 +382,47 @@ ctest("interact · sunk detects an input-claiming gui above the object", functio
 	gui:Destroy()
 end)
 
+test("interact · an interrupted press releases and old input cannot release a newer press", function()
+	local Environment = makeEnv()
+	local Button
+	local Root = {
+		GetGuiObjectsAtPosition = function()
+			return { Button }
+		end,
+	}
+	Button = makeGui(Root)
+	local Pressed = InteractModule.PressWith(Button, Environment)
+	local function NewTouch()
+		local Changed = makeSignal()
+		return {
+			UserInputType = Enum.UserInputType.Touch,
+			UserInputState = Enum.UserInputState.Begin,
+			Position = { X = 10, Y = 10 },
+			GetPropertyChangedSignal = function()
+				return Changed
+			end,
+		}, Changed
+	end
+	local Passed, Problem = pcall(function()
+		local First, FirstChanged = NewTouch()
+		Button.InputBegan:Fire(First)
+		expect(Pressed:Get(), "first press starts")
+		First.UserInputState = Enum.UserInputState.Cancel
+		FirstChanged:Fire()
+		expect(not Pressed:Get(), "cancellation releases without InputEnded")
+
+		local Second = NewTouch()
+		Button.InputBegan:Fire(Second)
+		FirstChanged:Fire()
+		expect(Pressed:Get(), "old input cannot release second press")
+		Environment.UserInputService.WindowFocusReleased:Fire()
+		expect(not Pressed:Get(), "focus loss releases without InputEnded")
+
+		Button.InputBegan:Fire(First)
+		expect(not Pressed:Get(), "a deferred begin for cancelled input cannot restart a press")
+	end)
+	Pressed:Destroy()
+	assert(Passed, Problem)
+end)
+
 return {}

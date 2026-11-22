@@ -11,7 +11,7 @@ Source: [Flux v0.5.2](https://github.com/kohltastrophe/flux/tree/1a2ae9a332cef3f
 | Layout and motion | Adapted Layout.Scale, Flex ratios/configuration and tween Snap. The clock/motion follow-up restores delay for resting tweens and exact settlement at rounded completion boundaries. Mid-flight retarget still skips the delay. Other motion and layout changes remain pending. |
 | Store | Adapted multi-parent proxy ownership, cyclic reconcile, safe orphan teardown, NaN keyed matching, and frozen table handling. Registered cleanup already took precedence over a Destroy data key. |
 | Clock | Manual rescheduling replaces stale queue entries for the same thread. Newly scheduled timers wait until the next frame without blocking older eligible deadlines. Other upstream clock hardening remains pending. |
-| Input and responsive | No port in this checkpoint. |
+| Input and responsive | Adapted release on interrupted input, and fallback to the live viewport when container measurements are unavailable. Other platform and occlusion changes are not part of this port. |
 | Graph | Unchanged. The existing evaluator passed a primed 5,000-node chain probe; that is not an unbounded-depth claim. Upstream evaluator integration, computed callback typing, Safe reset and the comparative performance gate are pending. |
 | Overlays, exits, virtualization and examples | Unchanged; native and example validation pending. Sync is out of scope. |
 
@@ -32,3 +32,7 @@ Shared store proxies linked by reads or writes remain reactive when another link
 ## Clock and motion follow-up
 
 The manual-clock replay reproduced four failures: stale reschedules, blocked eligible timers, skipped tween delay from rest, and a stalled tween at its rounded completion boundary. Cancellation/FIFO and spring momentum on retarget already worked and remain covered. The inherited reactive tween delay test now checks public behavior without manually resetting the internal tween.
+
+## Responsive, input, and layout follow-up
+
+ScaleOf and BreakpointOf accept unavailable container measurements and follow the global viewport until the container publishes a value. Layout.Corner resolves reactive overrides before selecting the first available corner, side, radius, or default. Press releases on cancellation and window focus loss and ignores a begin event for an already finished input. These changes do not alter the evaluator, overlay focus policy, or virtualization.

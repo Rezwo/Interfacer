@@ -28,6 +28,8 @@ export type HoverServices = {
 local MouseMovementInput = Enum.UserInputType.MouseMovement
 local PrimaryMouseInput = Enum.UserInputType.MouseButton1
 local TouchInput = Enum.UserInputType.Touch
+local EndedInputState = Enum.UserInputState.End
+local CancelledInputState = Enum.UserInputState.Cancel
 local ActivationKeys : { [any] : boolean } = {
 	[Enum.KeyCode.ButtonA] = true,
 	[Enum.KeyCode.Return] = true,
@@ -556,9 +558,19 @@ local function PressWith(Object : GuiObject, Services : Services) : Graph.Node<b
 	local Held : InputObject? = nil
 	local ReleaseListener : RBXScriptConnection? = nil
 	local MenuListener : RBXScriptConnection? = nil
+	local FocusListener : RBXScriptConnection? = nil
+	local InputStateListener : RBXScriptConnection? = nil
 
 	local function ReleasePress()
 		Held = nil
+		if FocusListener ~= nil then
+			FocusListener:Disconnect()
+			FocusListener = nil
+		end
+		if InputStateListener ~= nil then
+			InputStateListener:Disconnect()
+			InputStateListener = nil
+		end
 		if MenuListener ~= nil then
 			MenuListener:Disconnect()
 			MenuListener = nil
@@ -584,12 +596,16 @@ local function PressWith(Object : GuiObject, Services : Services) : Graph.Node<b
 			and Input.KeyCode == Current.KeyCode
 	end
 
+	local function IsFinished(Input : InputObject) : boolean
+		local State = Input.UserInputState
+		return State == EndedInputState or State == CancelledInputState
+	end
+
 	local function Hold(Input : InputObject)
-		if Held ~= nil or MenuOpen(Services) then
+		if Held ~= nil or IsFinished(Input) or MenuOpen(Services) then
 			return
 		end
 		Held = Input
-		Pressed:Set(true)
 		MenuListener = Services.GuiService:GetPropertyChangedSignal("MenuIsOpen"):Connect(function()
 			if MenuOpen(Services) then
 				ReleasePress()
@@ -600,6 +616,19 @@ local function PressWith(Object : GuiObject, Services : Services) : Graph.Node<b
 				ReleasePress()
 			end
 		end)
+		FocusListener = Services.UserInputService.WindowFocusReleased:Connect(function()
+			if Held == Input then
+				ReleasePress()
+			end
+		end)
+		if Input.GetPropertyChangedSignal ~= nil then
+			InputStateListener = Input:GetPropertyChangedSignal("UserInputState"):Connect(function()
+				if Held == Input and IsFinished(Input) then
+					ReleasePress()
+				end
+			end)
+		end
+		Pressed:Set(true)
 	end
 
 	local Pointer = Object.InputBegan:Connect(function(Input : InputObject)
