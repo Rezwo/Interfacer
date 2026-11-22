@@ -206,6 +206,7 @@ local Interfacer = {
 	CreateStore = Store.New,
 	Split = Edit.Split,
 	Merge = Edit.Merge,
+	Mount = Edit.Mount,
 	Safe = Graph.Safe,
 
 	Property = Bind.Property,

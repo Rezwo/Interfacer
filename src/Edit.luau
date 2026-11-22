@@ -1047,6 +1047,88 @@ const function ConstructInstance(ClassName : string, Properties : any) : Instanc
 	return Result
 end
 
+const function Mount(Render : () -> ...unknown, Target : Graph.Reactive<Instance?>?) : () -> ()
+	assert(type(Render) == "function", "Mount expects a render function")
+	assert(Target == nil or Bind.IsInstance(Target) or Graph.IsDynamic(Target), "Mount expects an Instance or reactive target")
+	local MountOwner : Graph.Node<any>? = nil
+	local function Unmount()
+		local Owner = MountOwner
+		MountOwner = nil
+		if Owner ~= nil then
+			Owner:Destroy()
+		end
+	end
+
+	Graph.Scope(function(Owner)
+		MountOwner = Owner
+		Graph.Cleanup(function()
+			MountOwner = nil
+		end)
+		if Target ~= nil and Bind.IsInstance(Target) then
+			Graph.Cleanup((Target :: Instance).Destroying:Connect(Unmount))
+		end
+		local Content = Render()
+		if Target == nil or MountOwner == nil then
+			return
+		end
+		local Children = Graph.State(Content)
+		Graph.Cleanup(Children)
+		local CurrentTarget : Instance? = nil
+		local Disconnect : (() -> ())? = nil
+		Graph.Cleanup(function()
+			local Release = Disconnect
+			Disconnect = nil
+			CurrentTarget = nil
+			if Release then
+				Release()
+			end
+		end)
+
+		local function ReconcileTarget(NextTarget : Instance?)
+			assert(NextTarget == nil or Bind.IsInstance(NextTarget), "Mount target must resolve to an Instance or nil")
+			if MountOwner == nil or NextTarget == CurrentTarget then
+				return
+			end
+			local Release = Disconnect
+			Disconnect = nil
+			CurrentTarget = NextTarget
+			if Release then
+				Release()
+			end
+			if NextTarget ~= nil and MountOwner ~= nil then
+				local CleanupValues : { any } = {}
+				local Passed, Result = pcall(function()
+					return Bind.Children(Children, NextTarget, nil, CleanupValues)
+				end)
+				if not Passed then
+					CurrentTarget = nil
+					local Cancel = CleanupValues[1]
+					if Cancel then
+						pcall(Cancel)
+					end
+					error(Result, 0)
+				end
+				if MountOwner ~= nil then
+					Disconnect = Result
+				else
+					Result()
+				end
+			end
+		end
+
+		ReconcileTarget(Graph.Raw(Target))
+		if Graph.IsDynamic(Target) and MountOwner ~= nil then
+			Graph.Effect(function()
+				local NextTarget = Graph.Read(Target)
+				Graph.Untrack(function()
+					ReconcileTarget(NextTarget)
+				end)
+			end)
+		end
+	end)
+	return Unmount
+end
+
 type PropertySources = { [number] : { [any] : any }?, n : number }
 const MergedPropertySources : { [any] : PropertySources } = setmetatable({} :: { [any] : PropertySources }, { __mode = "k" })
 
@@ -1114,6 +1196,7 @@ type MergePropertiesFunction = <First, Second, Third, Fourth>(
 return table.freeze({
 	Edit = EditInstance,
 	Merge = MergeProperties :: MergePropertiesFunction,
+	Mount = Mount,
 	New = ConstructInstance,
 	Flags = Flags,
 	Defaults = Defaults,

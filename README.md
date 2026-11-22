@@ -48,7 +48,7 @@ Call `Interfacer.Dispose(Owner)` when that component unmounts. Constructors retu
 ## Included
 
 - Callable `State` and `Computed` values, `Effect`, scopes, ownership, cleanup and context.
-- `New` / `Edit` construction, reactive property bindings, native events, attributes, tags and styles.
+- Scoped `Mount(Render, Target?)`, `New` / `Edit` construction, reactive property bindings, native events, attributes, tags and styles.
 - Mapping and conditional helpers: `ForKey`, `ForValue`, `ForIndex`, `Show`, `ShowKeyed` and `Switch`.
 - Springs, tweens, clock, layout, responsive preferences, stores and asynchronous utilities.
 - Portals, modal stacks, dialogs, focus handling and exit transitions.
