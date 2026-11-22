@@ -7,9 +7,10 @@ Source: [Flux v0.5.2](https://github.com/kohltastrophe/flux/tree/1a2ae9a332cef3f
 | Ordinary mappings | Adapted the upstream mapper for stable keys, reactive index/item inputs, empty fallbacks and row cleanup. Virtual mapping is independent. |
 | Bindings | Adapted FromSignal and Listen on the current graph. The follow-up releases the shared effect after its final property or child binding disconnects; Typed On handles scalar, getter, and array sources; further binding changes remain pending. |
 | Construction | Adapted the live, right-biased Merge property view. The follow-up adapts scoped Mount to the existing native child-binding path, including static and reactive targets. Prop and Own now supply scoped component prop defaults through Split. Other construction/portal deltas remain pending. |
-| Async | Adapted pre-flush deduplication. Fetcher isolation remains pending. |
+| Async | Adapted pre-flush deduplication and isolated fetch launch from caller ownership and dependency tracking. |
 | Layout and motion | Adapted Layout.Scale, Flex ratios/configuration and tween Snap. Native layout verification and the remaining motion changes are pending. |
-| Store, clock, input and responsive | No port in this checkpoint. |
+| Store | Adapted multi-parent proxy ownership, cyclic reconcile, safe orphan teardown, NaN keyed matching, and frozen table handling. Registered cleanup already took precedence over a Destroy data key. |
+| Clock, input and responsive | No port in this checkpoint. |
 | Graph | Unchanged. The existing evaluator passed a primed 5,000-node chain probe; that is not an unbounded-depth claim. Upstream evaluator integration, computed callback typing, Safe reset and the comparative performance gate are pending. |
 | Overlays, exits, virtualization and examples | Unchanged; native and example validation pending. Sync is out of scope. |
 
@@ -22,3 +23,7 @@ The Mount/binding follow-up adds three native regressions and one portable Mount
 On unwraps a scalar node/getter, or each element of a dense array, without tracking reads made inside the callback. Array ordering is preserved; heterogeneous Luau arrays type their entries as a union, not a tuple. The previous input and previous callback result remain separate. Plain non-array tables pass as single values.
 
 Use Prop() to claim a key or Prop(Value) for a default; Own combines schema tables with the rightmost declaration taking precedence. Split fills only nil or missing values. Plain mutable default table graphs are cloned per split, preserving cycles and sharing inside each default. Frozen tables and values with metatables keep their identity. If multiple Split groups claim a key, the first group wins.
+
+## Store and async follow-up
+
+Shared store proxies linked by reads or writes remain reactive when another linked parent drops them. Losing the last reachable parent releases proxy cycles, and reconcile guards against revisiting cyclic backing tables. Async launch uses the existing owner and tracking controls without replacing the evaluator. The focused replays are included in distribution verification.

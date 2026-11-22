@@ -8,7 +8,7 @@ local ReadRawValue = Graph.Raw
 local ReadReactiveValue = Graph.Read
 local CreateState = Graph.State
 local RunUntracked = Graph.Untrack
-local RunRetracked = Graph.Retrack
+local RunWithOwner = Graph.WithOwner
 local TaskLibrary = Compatibility.Task
 
 const function GatedOff(ReactiveSource : any, Input : any) : boolean
@@ -66,9 +66,11 @@ const function Trigger(Self : Data, Input : any, Refetching : any)
 	Self.Loading:Set(true)
 	Self.Error:Set(nil)
 	Self.State:Set(if Self.HasResolved then "Refreshing" else "Pending")
-	RunUntracked()
-	TaskLibrary.spawn(RunFetcher, Self, Input, CurrentIdentifier, Refetching)
-	RunRetracked()
+	RunUntracked(function()
+		RunWithOwner(nil, function()
+			TaskLibrary.spawn(RunFetcher, Self, Input, CurrentIdentifier, Refetching)
+		end)
+	end)
 end
 
 local Asynchronous = {}

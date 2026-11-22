@@ -40,6 +40,7 @@ def main():
         ("verification/FluxV052Merge.luau", ["FLUX V052 MERGE PASS"]),
         ("verification/FluxV052Mount.luau", ["FLUX V052 MOUNT PASS"]),
         ("verification/FluxV052TypedUI.luau", ["FLUX V052 TYPED UI PASS"]),
+        ("verification/FluxV052Store.luau", ["FLUX V052 STORE PASS"]),
     ]:
         command = [cli, "-O2", script]
         result = subprocess.run(command, cwd=package, capture_output=True, text=True,
