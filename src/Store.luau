@@ -15,35 +15,112 @@ local RegisterResource = Graph.Register
 local ReportWarning = Compatibility.Warn
 
 type StoreMetadata = {
-	__index : (Proxy : any, PropertyKey : any) -> any,
-	__newindex : (Proxy : any, PropertyKey : any, Value : any) -> (),
+	__index : (Proxy : any, Key : any) -> any,
+	__newindex : (Proxy : any, Key : any, Value : any) -> (),
 	__iter : (Proxy : any) -> ...any,
 	__len : (Proxy : any) -> number,
 	Target : { [any] : any },
 	Nodes : { [any] : Graph.Node<any> },
-	Parent : StoreMetadata?,
+	Proxy : any,
+	Parents : { [any] : boolean }?,
 	Children : { [any] : boolean }?,
+	Root : boolean?,
 }
 
-local ProxiesByRawTable = setmetatable({}, { __mode = "v" }) :: { [{ [any] : any }] : any }
-local RawTablesByProxy = setmetatable({}, { __mode = "k" }) :: { [any] : { [any] : any } }
+local ProxiesByRawTable : { [any] : any } = setmetatable({} :: { [any] : any }, { __mode = "v" })
+local RawTablesByProxy : { [any] : { [any] : any } } = setmetatable({} :: { [any] : { [any] : any } }, { __mode = "k" })
 
 local StoreSymbol : any = table.freeze({})
+local NotANumberKey : any = table.freeze({})
 
 const function GetRawStoreValue(Value : any) : any
 	return if type(Value) == "table" then RawTablesByProxy[Value] or Value else Value
 end
 
-local ReadProxyKey : (Proxy : any, PropertyKey : any) -> any
-local WriteProxyKey : (Proxy : any, PropertyKey : any, Value : any) -> ()
+const function IsPlainMutableTable(Value : any) : boolean
+	return type(Value) == "table" and getmetatable(Value) == nil and not table.isfrozen(Value)
+end
+
+const function IsRootReachable(StartProxy : any) : boolean
+	local Metadata = getmetatable(StartProxy) :: StoreMetadata?
+	if Metadata == nil then
+		return false
+	elseif Metadata.Root then
+		return true
+	end
+	local Parents = Metadata.Parents
+	if Parents == nil or next(Parents) == nil then
+		return false
+	end
+	local Visited : { [any] : boolean } = { [StartProxy] = true }
+	local Stack : { any } = { StartProxy }
+	while #Stack > 0 do
+		local Current = table.remove(Stack)
+		local CurrentMetadata = getmetatable(Current) :: StoreMetadata?
+		local CurrentParents = if CurrentMetadata then CurrentMetadata.Parents else nil
+		if CurrentParents then
+			for ParentProxy in CurrentParents do
+				if not Visited[ParentProxy] then
+					local ParentMetadata = getmetatable(ParentProxy) :: StoreMetadata?
+					if ParentMetadata then
+						if ParentMetadata.Root then
+							return true
+						end
+						Visited[ParentProxy] = true
+						table.insert(Stack, ParentProxy)
+					end
+				end
+			end
+		end
+	end
+	return false
+end
+
+const function LinkParent(ChildProxy : any, ParentProxy : any)
+	if ParentProxy == nil or ChildProxy == ParentProxy then
+		return
+	end
+	local ChildMetadata = getmetatable(ChildProxy) :: StoreMetadata?
+	local ParentMetadata = getmetatable(ParentProxy) :: StoreMetadata?
+	if ChildMetadata == nil or ParentMetadata == nil then
+		return
+	end
+	local Parents = ChildMetadata.Parents
+	if Parents == nil then
+		Parents = {}
+		ChildMetadata.Parents = Parents
+	end
+	(Parents :: { [any] : boolean })[ParentProxy] = true
+	local Children = ParentMetadata.Children
+	if Children == nil then
+		Children = {}
+		ParentMetadata.Children = Children
+	end
+	(Children :: { [any] : boolean })[ChildProxy] = true
+end
+
+const function LinkIfProxied(RawValue : any, ParentProxy : any)
+	if type(RawValue) == "table" and ProxiesByRawTable[RawValue] ~= nil then
+		LinkParent(ProxiesByRawTable[RawValue], ParentProxy)
+	end
+end
+
+local ReadProxyKey : (Proxy : any, Key : any) -> any
+local WriteProxyKey : (Proxy : any, Key : any, Value : any) -> ()
 local IterateProxy : (Proxy : any) -> ...any
 local GetProxyLength : (Proxy : any) -> number
 
-const function DestroyProxy(Proxy : any)
+const function DestroyProxy(Proxy : any, PriorVisits : { [any] : boolean }?)
 	local Target = RawTablesByProxy[Proxy]
 	if Target == nil then
 		return
 	end
+	local Visited = PriorVisits or {}
+	if Visited[Proxy] then
+		return
+	end
+	Visited[Proxy] = true
+
 	local Metadata = getmetatable(Proxy) :: StoreMetadata
 	if ProxiesByRawTable[Target] == Proxy then
 		ProxiesByRawTable[Target] = nil
@@ -52,15 +129,30 @@ const function DestroyProxy(Proxy : any)
 	RegisterResource(Proxy, nil)
 	setmetatable(Proxy, nil)
 
-	local Parent = Metadata.Parent
-	if Parent and Parent.Children then
-		Parent.Children[Proxy] = nil
+	local Parents = Metadata.Parents
+	if Parents then
+		Metadata.Parents = nil
+		for ParentProxy in Parents do
+			local ParentMetadata = getmetatable(ParentProxy) :: StoreMetadata?
+			if ParentMetadata and ParentMetadata.Children then
+				ParentMetadata.Children[Proxy] = nil
+			end
+		end
 	end
 	local Children = Metadata.Children
 	if Children then
 		Metadata.Children = nil
-		for Child in Children do
-			DestroyProxy(Child)
+		for ChildProxy in Children do
+			local ChildMetadata = getmetatable(ChildProxy) :: StoreMetadata?
+			if ChildMetadata then
+				local ChildParents = ChildMetadata.Parents
+				if ChildParents then
+					ChildParents[Proxy] = nil
+				end
+				if not IsRootReachable(ChildProxy) then
+					DestroyProxy(ChildProxy, Visited)
+				end
+			end
 		end
 	end
 	local Nodes = Metadata.Nodes
@@ -70,9 +162,26 @@ const function DestroyProxy(Proxy : any)
 	table.clear(Nodes)
 end
 
-const function CreateProxy<ValueType>(Target : ValueType, ParentMetadata : StoreMetadata?) : ValueType
-	local Cached = ProxiesByRawTable[Target :: any]
+const function DisposeRootProxy(Proxy : any)
+	DestroyProxy(Proxy)
+end
+
+const function CreateProxy<ValueType>(Target : ValueType, ParentProxy : any?) : ValueType
+	local RawTarget : any = Target
+	local Cached = ProxiesByRawTable[RawTarget]
 	if Cached then
+		if ParentProxy ~= nil then
+			LinkParent(Cached, ParentProxy)
+		else
+			local CachedMetadata = getmetatable(Cached) :: StoreMetadata?
+			if CachedMetadata ~= nil then
+				local WasRoot = CachedMetadata.Root
+				CachedMetadata.Root = true
+				if not WasRoot and GetCurrentOwner() ~= nil then
+					RegisterCleanup(Cached)
+				end
+			end
+		end
 		return Cached
 	end
 
@@ -82,32 +191,30 @@ const function CreateProxy<ValueType>(Target : ValueType, ParentMetadata : Store
 		__newindex = WriteProxyKey,
 		__iter = IterateProxy,
 		__len = GetProxyLength,
-		Target = Target :: any,
+		Target = RawTarget,
 		Nodes = Nodes,
-		Parent = ParentMetadata,
+		Proxy = nil,
+		Parents = nil,
 		Children = nil,
+		Root = ParentProxy == nil,
 	}
-	local Proxy = setmetatable({}, Metadata)
+	local Proxy : any = setmetatable({}, Metadata)
+	Metadata.Proxy = Proxy
 
-	ProxiesByRawTable[Target :: any] = Proxy
-	RawTablesByProxy[Proxy] = Target :: any
-	RegisterResource(Proxy, DestroyProxy)
+	ProxiesByRawTable[RawTarget] = Proxy
+	RawTablesByProxy[Proxy] = RawTarget
+	RegisterResource(Proxy, DisposeRootProxy)
 
-	if ParentMetadata then
-		local Children = ParentMetadata.Children
-		if Children == nil then
-			Children = {}
-			ParentMetadata.Children = Children
-		end
-		(Children :: { [any] : boolean })[Proxy] = true
+	if ParentProxy ~= nil then
+		LinkParent(Proxy, ParentProxy)
 	elseif GetCurrentOwner() ~= nil then
 		RegisterCleanup(Proxy)
 	end
 
-	return Proxy :: any
+	return Proxy
 end
 
-const function TeardownDisplaced(Target : { [any] : any }, Displaced : any)
+const function TeardownDisplaced(ParentProxy : any, Target : { [any] : any }, Displaced : any)
 	if type(Displaced) ~= "table" then
 		return
 	end
@@ -120,7 +227,27 @@ const function TeardownDisplaced(Target : { [any] : any }, Displaced : any)
 			return
 		end
 	end
-	DestroyProxy(DisplacedProxy)
+	local ParentMetadata = getmetatable(ParentProxy) :: StoreMetadata?
+	if ParentMetadata and ParentMetadata.Children then
+		ParentMetadata.Children[DisplacedProxy] = nil
+	end
+	local ChildMetadata = getmetatable(DisplacedProxy) :: StoreMetadata?
+	if ChildMetadata then
+		if ChildMetadata.Parents then
+			ChildMetadata.Parents[ParentProxy] = nil
+		end
+		if not IsRootReachable(DisplacedProxy) then
+			DestroyProxy(DisplacedProxy)
+		end
+	end
+end
+
+const function SetKeyValue(Nodes : { [any] : any }, Key : any, Record : any, Value : any)
+	SetNodeValue(Record, Value)
+	if Value == nil and not IsTrackingCalculation() and GetCurrentOwner() == nil and not HasObservers(Record) then
+		Nodes[Key] = nil
+		DestroyNode(Record)
+	end
 end
 
 const function FireTracker(Nodes : { [any] : any }, Target : { [any] : any })
@@ -130,12 +257,7 @@ const function FireTracker(Nodes : { [any] : any }, Target : { [any] : any })
 	end
 end
 
-const function ResynchronizeIndices(
-	Nodes : { [any] : any },
-	Target : { [any] : any },
-	From : number,
-	Destination : number
-)
+const function ResynchronizeIndices(Nodes : { [any] : any }, Target : { [any] : any }, From : number, Destination : number)
 	for Index = From, Destination do
 		local Record = Nodes[Index]
 		if Record then
@@ -153,7 +275,7 @@ const function ReadTracker(Metadata : StoreMetadata) : { [any] : any }
 		Tracker = CreateState(Target)
 		Nodes[StoreSymbol] = Tracker
 	end
-	GetNodeValue(Tracker :: any)
+	GetNodeValue(Tracker)
 
 	return Target
 end
@@ -167,64 +289,56 @@ const function ValidatePosition(Position : any, MaximumPosition : number) : numb
 	return Position
 end
 
-function ReadProxyKey(Proxy : any, PropertyKey : any) : any
+function ReadProxyKey(Proxy : any, Key : any) : any
 	local Metadata : StoreMetadata = getmetatable(Proxy)
-	local Value = rawget(Metadata.Target, PropertyKey)
+	local Value = rawget(Metadata.Target, Key)
 
 	if IsTrackingCalculation() then
 		local Nodes = Metadata.Nodes
-		local Record = Nodes[PropertyKey]
+		local Record = Nodes[Key]
 		if Record == nil then
 			Record = CreateState(Value)
-			Nodes[PropertyKey] = Record
+			Nodes[Key] = Record
 		end
 		GetNodeValue(Record)
 	end
 
-	if type(Value) == "table" and getmetatable(Value) == nil then
-		return CreateProxy(Value, Metadata)
+	if IsPlainMutableTable(Value) then
+		return CreateProxy(Value, Proxy)
 	end
 	return Value
 end
 
-function WriteProxyKey(Proxy : any, PropertyKey : any, NewValue : any)
+function WriteProxyKey(Proxy : any, Key : any, NewValue : any)
 	local Metadata : StoreMetadata = getmetatable(Proxy)
 	local Target = Metadata.Target
 	local RawValue = GetRawStoreValue(NewValue)
-	local OldValue = rawget(Target, PropertyKey)
-
-	if OldValue ~= RawValue or type(RawValue) == "table" then
-		rawset(Target, PropertyKey, RawValue)
-
-		if type(OldValue) == "table" and OldValue ~= RawValue then
-			TeardownDisplaced(Target, OldValue)
-		end
-
-		local Nodes = Metadata.Nodes
-		local Record = Nodes[PropertyKey]
-		if Record ~= nil then
-			SetNodeValue(Record, RawValue)
-			if
-				RawValue == nil
-				and not IsTrackingCalculation()
-				and GetCurrentOwner() == nil
-				and not HasObservers(Record)
-			then
-				Nodes[PropertyKey] = nil
-				DestroyNode(Record)
-			end
-		end
-
-		FireTracker(Nodes, Target)
+	local OldValue = rawget(Target, Key)
+	if OldValue == RawValue and type(RawValue) ~= "table" then
+		return
 	end
+
+	rawset(Target, Key, RawValue)
+	LinkIfProxied(RawValue, Proxy)
+	if type(OldValue) == "table" and OldValue ~= RawValue then
+		TeardownDisplaced(Proxy, Target, OldValue)
+	end
+
+	local Nodes = Metadata.Nodes
+	local Record = Nodes[Key]
+	if Record ~= nil then
+		SetKeyValue(Nodes, Key, Record, RawValue)
+	end
+
+	FireTracker(Nodes, Target)
 end
 
-const function NextProxy(Metadata : StoreMetadata, Key : any) : (any, any)
-	local PropertyKey, Value = next(Metadata.Target, Key)
-	if type(Value) == "table" and getmetatable(Value) == nil then
-		return PropertyKey, CreateProxy(Value, Metadata)
+const function NextProxy(Metadata : StoreMetadata, KeyValue : any) : (any, any)
+	local Key, Value = next(Metadata.Target, KeyValue)
+	if IsPlainMutableTable(Value) then
+		return Key, CreateProxy(Value, Metadata.Proxy)
 	end
-	return PropertyKey, Value
+	return Key, Value
 end
 
 function IterateProxy(Proxy : any)
@@ -279,6 +393,7 @@ function Store.Insert(Proxy : any, PositionOrValue : any, Value : any?)
 
 	local RawValue = GetRawStoreValue(CurrentValue)
 	table.insert(Target, Position, RawValue)
+	LinkIfProxied(RawValue, Proxy)
 
 	local Nodes = (getmetatable(Proxy) :: StoreMetadata).Nodes
 	ResynchronizeIndices(Nodes, Target, Position, #Target)
@@ -299,16 +414,16 @@ function Store.Remove(Proxy : any, Position : number?) : any
 		return nil
 	end
 
-	local Index = Position or Length
-	local Removed = table.remove(Target, Index)
+	local RemovalIndex = Position or Length
+	local Removed = table.remove(Target, RemovalIndex)
 
-	TeardownDisplaced(Target, Removed)
+	TeardownDisplaced(Proxy, Target, Removed)
 
 	local Nodes = (getmetatable(Proxy) :: StoreMetadata).Nodes
-	ResynchronizeIndices(Nodes, Target, Index, Length - 1)
-	local TailNode = Nodes[Length]
-	if TailNode then
-		SetNodeValue(TailNode, nil)
+	ResynchronizeIndices(Nodes, Target, RemovalIndex, Length - 1)
+	local TailRecord = Nodes[Length]
+	if TailRecord then
+		SetKeyValue(Nodes, Length, TailRecord, nil)
 	end
 
 	FireTracker(Nodes, Target)
@@ -336,70 +451,106 @@ function Store.Move(Proxy : any, From : number, Destination : number)
 	FireTracker(Nodes, Target)
 end
 
-const function IsArrayLike(ValueOrStorage : { [any] : any }) : boolean
-	return rawget(ValueOrStorage, 1) ~= nil
+const function IsArrayLike(Values : { [any] : any }) : boolean
+	return rawget(Values, 1) ~= nil
 end
 
-const function IsArrayIndex(PropertyKey : any, ArrayLength : number) : boolean
-	return type(PropertyKey) == "number"
-		and PropertyKey >= 1
-		and PropertyKey <= ArrayLength
-		and PropertyKey == math.floor(PropertyKey)
+const function IsArrayIndex(Key : any, ArrayLength : number) : boolean
+	return type(Key) == "number" and Key >= 1 and Key <= ArrayLength and Key == math.floor(Key)
 end
 
 local ReconcileTable : (
 	Proxy : any,
 	Target : { [any] : any },
 	NewData : { [any] : any },
-	ReconcileKey : string?
+	ReconcileKey : string?,
+	Visited : { [any] : boolean }?
 ) -> ()
 
-const function SynchronizeRawValue(PreviousValue : { [any] : any }, NewData : { [any] : any })
-	for Field in PreviousValue do
+const function DestroyOrphanedProxy(RawValue : any)
+	if type(RawValue) == "table" then
+		local CachedProxy = ProxiesByRawTable[RawValue]
+		if CachedProxy ~= nil and not IsRootReachable(CachedProxy) then
+			DestroyProxy(CachedProxy)
+		end
+	end
+end
+
+const function SynchronizeRawValue(
+	PreviousValue : { [any] : any },
+	NewData : { [any] : any },
+	ReconcileKey : string?,
+	Visited : { [any] : boolean }
+)
+	if Visited[PreviousValue] then
+		return
+	end
+	Visited[PreviousValue] = true
+	for Field, PreviousFieldValue in PreviousValue do
 		if rawget(NewData, Field) == nil then
 			PreviousValue[Field] = nil
+			DestroyOrphanedProxy(PreviousFieldValue)
 		end
 	end
 	for Field, Value in NewData do
-		PreviousValue[Field] = GetRawStoreValue(Value)
+		local NewRawValue = GetRawStoreValue(Value)
+		local OldFieldValue = rawget(PreviousValue, Field)
+		if type(OldFieldValue) == "table" and IsPlainMutableTable(OldFieldValue) and IsPlainMutableTable(NewRawValue) then
+			local ChildProxy = ProxiesByRawTable[OldFieldValue]
+			if ChildProxy ~= nil then
+				ReconcileTable(ChildProxy, OldFieldValue, NewRawValue, ReconcileKey, Visited)
+			elseif OldFieldValue ~= NewRawValue then
+				SynchronizeRawValue(OldFieldValue, NewRawValue, ReconcileKey, Visited)
+			end
+		else
+			rawset(PreviousValue, Field, NewRawValue)
+			if OldFieldValue ~= NewRawValue then
+				DestroyOrphanedProxy(OldFieldValue)
+			end
+		end
 	end
 end
 
 const function ReconcileLeaf(
+	Proxy : any,
 	Target : { [any] : any },
 	Nodes : { [any] : any },
-	PropertyKey : any,
+	Key : any,
 	NewRawValue : any,
-	ReconcileKey : string?
+	ReconcileKey : string?,
+	Visited : { [any] : boolean }
 ) : boolean
-	local OldValue = rawget(Target, PropertyKey)
+	local OldValue = rawget(Target, Key)
 	if OldValue == NewRawValue then
 		return false
 	end
-	if type(OldValue) == "table" and type(NewRawValue) == "table" then
+	if type(OldValue) == "table" and IsPlainMutableTable(OldValue) and IsPlainMutableTable(NewRawValue) then
 		local OldProxy = ProxiesByRawTable[OldValue]
 		if OldProxy ~= nil then
-			ReconcileTable(OldProxy, OldValue, NewRawValue, ReconcileKey)
+			ReconcileTable(OldProxy, OldValue, NewRawValue, ReconcileKey, Visited)
 		else
-			SynchronizeRawValue(OldValue, NewRawValue)
+			SynchronizeRawValue(OldValue, NewRawValue, ReconcileKey, Visited)
 		end
 		return false
 	end
-	rawset(Target, PropertyKey, NewRawValue)
+	rawset(Target, Key, NewRawValue)
 	if type(OldValue) == "table" then
-		TeardownDisplaced(Target, OldValue)
+		TeardownDisplaced(Proxy, Target, OldValue)
 	end
-	local Record = Nodes[PropertyKey]
+	LinkIfProxied(NewRawValue, Proxy)
+	local Record = Nodes[Key]
 	if Record ~= nil then
-		SetNodeValue(Record, NewRawValue)
+		SetKeyValue(Nodes, Key, Record, NewRawValue)
 	end
 	return true
 end
 
 const function ReconcileArray(
+	Proxy : any,
 	Target : { [any] : any },
 	NewData : { [any] : any },
-	Nodes : { [any] : any }
+	Nodes : { [any] : any },
+	Visited : { [any] : boolean }
 ) : (number, boolean)
 	local OldLength = #Target
 	local NewLength = #NewData
@@ -407,41 +558,41 @@ const function ReconcileArray(
 	local Structural = false
 
 	for Index = 1, Span do
-		Structural = ReconcileLeaf(
-			Target,
-			Nodes,
-			Index,
-			GetRawStoreValue(rawget(NewData, Index)),
-			nil
-		) or Structural
+		Structural = ReconcileLeaf(Proxy, Target, Nodes, Index, GetRawStoreValue(rawget(NewData, Index)), nil, Visited) or Structural
 	end
 
 	return Span, Structural
 end
 
+const function NormalizeReconcileKey(KeyValue : any) : any
+	return if KeyValue ~= KeyValue then NotANumberKey else KeyValue
+end
+
 const function ReconcileArrayKeyed(
+	Proxy : any,
 	Target : { [any] : any },
 	NewData : { [any] : any },
 	Nodes : { [any] : any },
-	ReconcileKey : string
+	ReconcileKey : string,
+	Visited : { [any] : boolean }
 ) : (number, boolean)
 	local OldLength = #Target
 	local NewLength = #NewData
 	local Span = if OldLength > NewLength then OldLength else NewLength
 	local Structural = false
 
-	local OldElements = table.create(OldLength)
+	local OldElements = table.create(Span)
 	local OldByKey : { [any] : any } = {}
-	for Index = 1, OldLength do
+	for Index = 1, Span do
 		local Element = rawget(Target, Index)
 		if Element == nil then
 			continue
 		end
 		OldElements[Index] = Element
 		if type(Element) == "table" then
-			local Key = rawget(Element, ReconcileKey)
-			if Key ~= nil then
-				OldByKey[Key] = Element
+			local KeyValue = rawget(Element, ReconcileKey)
+			if KeyValue ~= nil then
+				OldByKey[NormalizeReconcileKey(KeyValue)] = Element
 			end
 		end
 	end
@@ -452,34 +603,32 @@ const function ReconcileArrayKeyed(
 		local NewRawValue = GetRawStoreValue(rawget(NewData, Index))
 
 		local Placed = NewRawValue
-		if type(NewRawValue) == "table" then
-			local Key = rawget(NewRawValue, ReconcileKey)
+		if IsPlainMutableTable(NewRawValue) then
+			local KeyValue = rawget(NewRawValue, ReconcileKey)
 			local Reuse
-			if Key ~= nil then
-				if SeenKeys[Key] then
+			if KeyValue ~= nil then
+				local KeySlot = NormalizeReconcileKey(KeyValue)
+				if SeenKeys[KeySlot] then
 					ReportWarning(
-						`[Flux] Store.reconcile: duplicate key "{tostring(Key)}" on field "{ReconcileKey}"; keys must be unique or the duplicate aliases one element`
+						`[Flux] Store.reconcile : duplicate key "{tostring(KeyValue)}" on field "{ReconcileKey}"; keys must be unique or the duplicate aliases one element`
 					)
 				else
-					SeenKeys[Key] = true
+					SeenKeys[KeySlot] = true
 				end
-				Reuse = OldByKey[Key]
+				Reuse = OldByKey[KeySlot]
 			else
 				local PreviousValue : any = OldElements[Index]
-				if
-					type(PreviousValue) == "table"
-					and rawget(PreviousValue, ReconcileKey) == nil
-				then
+				if IsPlainMutableTable(PreviousValue) and rawget(PreviousValue, ReconcileKey) == nil then
 					Reuse = PreviousValue
 				end
 			end
-			if Reuse ~= nil then
+			if Reuse ~= nil and IsPlainMutableTable(Reuse) then
 				Matched[Reuse] = true
 				local ChildProxy = ProxiesByRawTable[Reuse]
 				if ChildProxy ~= nil then
-					ReconcileTable(ChildProxy, Reuse, NewRawValue, ReconcileKey)
+					ReconcileTable(ChildProxy, Reuse, NewRawValue, ReconcileKey, Visited)
 				else
-					SynchronizeRawValue(Reuse, NewRawValue)
+					SynchronizeRawValue(Reuse, NewRawValue, ReconcileKey, Visited)
 				end
 				Placed = Reuse
 			end
@@ -488,17 +637,20 @@ const function ReconcileArrayKeyed(
 		if rawget(Target, Index) ~= Placed then
 			Structural = true
 			rawset(Target, Index, Placed)
+			if Placed == NewRawValue then
+				LinkIfProxied(Placed, Proxy)
+			end
 			local Record = Nodes[Index]
 			if Record ~= nil then
-				SetNodeValue(Record, Placed)
+				SetKeyValue(Nodes, Index, Record, Placed)
 			end
 		end
 	end
 
-	for Index = 1, OldLength do
+	for Index = 1, Span do
 		local Element = OldElements[Index]
 		if type(Element) == "table" and not Matched[Element] then
-			TeardownDisplaced(Target, Element)
+			TeardownDisplaced(Proxy, Target, Element)
 		end
 	end
 
@@ -509,40 +661,40 @@ function ReconcileTable(
 	Proxy : any,
 	Target : { [any] : any },
 	NewData : { [any] : any },
-	ReconcileKey : string?
+	ReconcileKey : string?,
+	Visited : { [any] : boolean }?
 )
+	local PriorVisits = Visited or {}
+	if PriorVisits[Target] then
+		return
+	end
+	PriorVisits[Target] = true
 	local Nodes = (getmetatable(Proxy) :: StoreMetadata).Nodes
 	local Structural = false
 
 	local ArrayLength = 0
 	if IsArrayLike(Target) or IsArrayLike(NewData) then
 		if ReconcileKey ~= nil then
-			ArrayLength, Structural = ReconcileArrayKeyed(Target, NewData, Nodes, ReconcileKey)
+			ArrayLength, Structural = ReconcileArrayKeyed(Proxy, Target, NewData, Nodes, ReconcileKey, PriorVisits)
 		else
-			ArrayLength, Structural = ReconcileArray(Target, NewData, Nodes)
+			ArrayLength, Structural = ReconcileArray(Proxy, Target, NewData, Nodes, PriorVisits)
 		end
 	end
 
-	for PropertyKey, NewValue in NewData do
-		if IsArrayIndex(PropertyKey, ArrayLength) then
+	for Key, NewValue in NewData do
+		if IsArrayIndex(Key, ArrayLength) then
 			continue
 		end
-		Structural = ReconcileLeaf(
-			Target,
-			Nodes,
-			PropertyKey,
-			GetRawStoreValue(NewValue),
-			ReconcileKey
-		) or Structural
+		Structural = ReconcileLeaf(Proxy, Target, Nodes, Key, GetRawStoreValue(NewValue), ReconcileKey, PriorVisits) or Structural
 	end
 
-	for PropertyKey in Target do
-		if IsArrayIndex(PropertyKey, ArrayLength) then
+	for Key in Target do
+		if IsArrayIndex(Key, ArrayLength) then
 			continue
 		end
-		if rawget(NewData, PropertyKey) == nil then
+		if rawget(NewData, Key) == nil then
 			Structural = true
-			ReconcileLeaf(Target, Nodes, PropertyKey, nil, ReconcileKey)
+			ReconcileLeaf(Proxy, Target, Nodes, Key, nil, ReconcileKey, PriorVisits)
 		end
 	end
 
@@ -551,13 +703,13 @@ function ReconcileTable(
 	end
 end
 
-function Store.Reconcile<ValueType>(Proxy : ValueType, NewData : ValueType, PropertyKey : string?) : ValueType
+function Store.Reconcile<ValueType>(Proxy : ValueType, NewData : ValueType, Key : string?) : ValueType
 	local Target = RawTablesByProxy[Proxy]
 	assert(Target ~= nil, "Store.reconcile expects a store proxy")
 	assert(type(NewData) == "table", "Store.reconcile newData must be a table")
 
-	local NewRawValue = GetRawStoreValue(NewData)
-	ReconcileTable(Proxy, Target, NewRawValue :: any, PropertyKey)
+	local NewRawValue : { [any] : any } = GetRawStoreValue(NewData)
+	ReconcileTable(Proxy, Target, NewRawValue, Key)
 	return Proxy
 end
 

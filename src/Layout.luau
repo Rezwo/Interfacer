@@ -36,7 +36,14 @@ export type Align = "Start" | "Center" | "End"
 export type FlexAlign = Align | "SpaceBetween" | "SpaceAround" | "SpaceEvenly" | "Stretch" | "Fill" | "None"
 export type LineAlign = Align | "Stretch" | "Automatic"
 export type Direction = "Horizontal" | "Vertical"
-export type FlexMode = "Fill" | "Grow" | "Shrink" | "None"
+export type FlexMode = "Fill" | "Grow" | "Shrink" | "None" | "Custom"
+
+export type FlexConfiguration = {
+	Mode : Reactive<FlexMode | Enum.UIFlexMode>?,
+	Grow : Reactive<number>?,
+	Shrink : Reactive<number>?,
+	LineAlign : Reactive<LineAlign | Enum.ItemLineAlignment>?,
+}
 
 export type PaddingSides = {
 	Top : ReactiveLength?,
@@ -146,6 +153,7 @@ local FlexModes : EnumMap = {
 	Grow = Enum.UIFlexMode.Grow,
 	Shrink = Enum.UIFlexMode.Shrink,
 	None = Enum.UIFlexMode.None,
+	Custom = Enum.UIFlexMode.Custom,
 }
 local AspectTypes : EnumMap = {
 	Fit = Enum.AspectType.FitWithinMaxSize,
@@ -238,11 +246,18 @@ const function CornerProperty(
 	HorizontalMode : string
 ) : any
 	local Entries = Sides :: any
-	local Value = Entries[CreateCorner]
-		or Entries[VerticalMode]
-		or Entries[HorizontalMode]
-		or Sides.Radius
-	return DimensionProperty(if Value == nil then 8 else Value)
+	local Corner, Vertical, Horizontal, Radius =
+		Entries[CreateCorner], Entries[VerticalMode], Entries[HorizontalMode], Sides.Radius
+	if IsDynamicValue(Corner) or IsDynamicValue(Vertical) or IsDynamicValue(Horizontal) or IsDynamicValue(Radius) then
+		return function()
+			local Value = ReadReactiveValue(Corner)
+				or ReadReactiveValue(Vertical)
+				or ReadReactiveValue(Horizontal)
+				or ReadReactiveValue(Radius)
+			return ToDimension(if Value == nil then 8 else Value)
+		end
+	end
+	return ToDimension(Corner or Vertical or Horizontal or Radius or 8)
 end
 
 const function Spread(Values : { any }, Keypoint : any, Sequence : any) : any
@@ -568,19 +583,76 @@ function Layout.Grid(Options : GridConfiguration?) : UIGridLayout
 	}) :: any
 end
 
-function Layout.Flex(Mode : Reactive<FlexMode | Enum.UIFlexMode>?) : UIFlexItem
-	if IsDynamicValue(Mode) then
+type FlexValue = FlexConfiguration | number | FlexMode | Enum.UIFlexMode
+
+const function ToFlexConfiguration(Value : FlexValue?) : FlexConfiguration?
+	return if type(Value) == "table" and typeof(Value) ~= "EnumItem" then Value :: FlexConfiguration else nil
+end
+
+const function ReadFlexMode(Value : FlexValue?) : EnumItem?
+	local Configuration = ToFlexConfiguration(Value)
+	if Configuration then
+		local Mode = ReadReactiveValue(Configuration.Mode)
+		if Mode ~= nil then
+			local Resolved = ResolveEnum(FlexModes, Mode, "flexMode")
+			if Resolved ~= nil then
+				return Resolved
+			end
+		end
+		return if ReadReactiveValue(Configuration.Grow) ~= nil or ReadReactiveValue(Configuration.Shrink) ~= nil
+			then FlexModes.Custom
+			else FlexModes.Fill
+	end
+	if Value == nil then
+		return FlexModes.Fill
+	elseif type(Value) == "number" then
+		return FlexModes.Custom
+	end
+	return ResolveEnum(FlexModes, Value, "flexMode") or FlexModes.None
+end
+
+function Layout.Flex(Source : Reactive<FlexValue>?) : UIFlexItem
+	if IsDynamicValue(Source) or ToFlexConfiguration(Source :: FlexValue?) ~= nil then
+		local ConfigurationSource = if type(Source) == "function" then CreateComputed(Source) else Source
 		return ConstructInstance("UIFlexItem", {
+			__CLEAN = if type(Source) == "function" then { ConfigurationSource } else nil,
 			FlexMode = function()
-				local Value = ReadReactiveValue(Mode)
-				return if Value == nil
-					then FlexModes.Fill
-					else ResolveEnum(FlexModes, Value, "flexMode") or FlexModes.None
+				return ReadFlexMode(ReadReactiveValue(ConfigurationSource))
+			end,
+			GrowRatio = function()
+				local Value = ReadReactiveValue(ConfigurationSource)
+				if type(Value) == "number" then
+					return Value
+				end
+				local Configuration = ToFlexConfiguration(Value)
+				return if Configuration then ReadReactiveValue(Configuration.Grow) or 0 else 0
+			end,
+			ShrinkRatio = function()
+				local Configuration = ToFlexConfiguration(ReadReactiveValue(ConfigurationSource))
+				return if Configuration then ReadReactiveValue(Configuration.Shrink) or 0 else 0
+			end,
+			ItemLineAlignment = function()
+				local Configuration = ToFlexConfiguration(ReadReactiveValue(ConfigurationSource))
+				if Configuration then
+					local Alignment = ReadReactiveValue(Configuration.LineAlign)
+					if Alignment ~= nil then
+						return ResolveEnum(ItemLineAlignments, Alignment, "lineAlign") or Enum.ItemLineAlignment.Automatic
+					end
+				end
+				return Enum.ItemLineAlignment.Automatic
 			end,
 		}) :: any
+	elseif type(Source) == "number" then
+		return ConstructInstance("UIFlexItem", { FlexMode = FlexModes.Custom, GrowRatio = Source }) :: any
 	end
 	return ConstructInstance("UIFlexItem", {
-		FlexMode = if Mode == nil then FlexModes.Fill else ResolveEnum(FlexModes, Mode, "flexMode"),
+		FlexMode = if Source == nil then FlexModes.Fill else ResolveEnum(FlexModes, Source, "flexMode"),
+	}) :: any
+end
+
+function Layout.Scale(Amount : Reactive<number>?) : UIScale
+	return ConstructInstance("UIScale", {
+		Scale = if Amount == nil then 1 else Amount,
 	}) :: any
 end
 

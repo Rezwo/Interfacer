@@ -22,6 +22,7 @@ local ModelSymbol = table.freeze({ type = "Model" }) :: any
 local NoOperation = function() end
 
 type BindingData = {
+	Effect : Graph.Node<any>?,
 	InstanceBindings : { [Instance] : { { [string] : any }? } },
 	Children : {
 		CleanupConnection : RBXScriptConnection?,
@@ -351,6 +352,17 @@ const function ProcessBinds(BindingDataRecord : BindingData, Value : any)
 	ApplyChildren(BindingDataRecord, Value)
 end
 
+const function ReleaseIdleBindingEffect(Data : BindingData)
+	if Data.Children ~= nil or next(Data.InstanceBindings) ~= nil then
+		return
+	end
+	local Effect = Data.Effect
+	if Effect ~= nil then
+		Data.Effect = nil
+		Effect:Destroy()
+	end
+end
+
 const function CleanupChildrenBind<ValueType>(Record : Graph.Node<ValueType>, ParentInstance : Instance?)
 	local Data = BindingsByNode[Record]
 	if Data and Data.Children then
@@ -369,6 +381,7 @@ const function CleanupChildrenBind<ValueType>(Record : Graph.Node<ValueType>, Pa
 		end
 		table.clear(IncomingChildren.List)
 		table.clear(IncomingChildren)
+		ReleaseIdleBindingEffect(Data)
 	end
 end
 
@@ -377,13 +390,12 @@ const function GetBindData<ValueType>(Record : Graph.Node<ValueType>)
 	if Data == nil then
 		Data = { InstanceBindings = {}, Children = nil :: any }
 		BindingsByNode[Record] = Data
-		local EffectRegistration = RunWithOwner(nil :: any, function()
-			return CreateEffect(function()
-				ProcessBinds(Data, ReadNodeValue(Record))
-			end)
-		end)
 		Record:OnDestroy(function()
-			EffectRegistration:Destroy()
+			local Effect = Data.Effect
+			Data.Effect = nil
+			if Effect ~= nil then
+				Effect:Destroy()
+			end
 			for TargetInstance, Buckets in Data.InstanceBindings do
 				for Index, Bucket in Buckets do
 					if Bucket then
@@ -396,6 +408,13 @@ const function GetBindData<ValueType>(Record : Graph.Node<ValueType>)
 			table.clear(Data.InstanceBindings)
 			CleanupChildrenBind(Record)
 			BindingsByNode[Record] = nil
+		end)
+	end
+	if Data.Effect == nil then
+		Data.Effect = RunWithOwner(nil :: any, function()
+			return CreateEffect(function()
+				ProcessBinds(Data, ReadNodeValue(Record))
+			end)
 		end)
 	end
 	return Data
@@ -570,7 +589,17 @@ function Bind.Node(Object : any, Second : string?) : Graph.Node<any>
 	return CreateNode(Object)
 end
 
-function Bind.On<DependencyType, ResultType>(
+type OnFunction = <DependencyType, ResultType>(
+	Dependencies : DependencyType,
+	Callback : (
+		Input : Type.OnInput<DependencyType>,
+		PreviousInput : Type.OnInput<DependencyType>?,
+		PreviousResult : ResultType?
+	) -> ResultType,
+	Defer : boolean?
+) -> (PreviousResult : ResultType?) -> ResultType?
+
+const function CreateDependencyCallback<ResultType>(
 	Dependencies : any,
 	Callback : (
 		Input : any,
@@ -579,7 +608,10 @@ function Bind.On<DependencyType, ResultType>(
 	) -> ResultType,
 	Defer : boolean?
 ) : (PreviousResult : ResultType?) -> ResultType?
-	local IsArray = type(Dependencies) == "table" and not IsReactiveNode(Dependencies)
+	local IsArray = type(Dependencies) == "table"
+		and not IsReactiveNode(Dependencies)
+		and getmetatable(Dependencies) == nil
+		and (rawget(Dependencies, 1) ~= nil or next(Dependencies) == nil)
 	local Count = if IsArray then #(Dependencies :: { any }) else 0
 	local PreviousInput : any = nil
 
@@ -609,6 +641,8 @@ function Bind.On<DependencyType, ResultType>(
 	end
 end
 
+Bind.On = CreateDependencyCallback :: OnFunction
+
 function Bind.To<ValueType>(
 	Record : Graph.Node<ValueType>,
 	TargetInstance : Instance,
@@ -620,10 +654,13 @@ function Bind.To<ValueType>(
 	if RevokedInstances[TargetInstance] then
 		return NoOperation, false
 	end
-	local Data = GetBindData(Record)
 	local Attribute = IsAttribute == true
 	local BindingBucketIndex = if Attribute then 1 else 2
 	DisconnectProperty(TargetInstance, PropertyName, Attribute)
+	if RevokedInstances[TargetInstance] then
+		return NoOperation, false
+	end
+	local Data = GetBindData(Record)
 
 	local InstanceBindingBuckets = Data.InstanceBindings[TargetInstance]
 	if InstanceBindingBuckets == nil then
@@ -676,6 +713,7 @@ function Bind.To<ValueType>(
 		then
 			InstanceDisconnections[Target] = nil
 		end
+		ReleaseIdleBindingEffect(Data)
 		Data, Bucket, InstanceBindingBuckets, TargetBucket, TargetBuckets = nil, nil, nil, nil, nil
 		local Release = OnRevoked
 		OnRevoked = nil
@@ -696,6 +734,94 @@ function Bind.To<ValueType>(
 		error(Failure, 0)
 	end
 	return DisconnectBinding, RegisteredTarget ~= nil
+end
+
+type SignalConnection = { read Disconnect : (Self : any) -> () }
+type SignalSource<ValueType> =
+	{ read Connect : (Self : any, Callback : (Value : ValueType) -> ()) -> SignalConnection }
+	| { read connect : (Self : any, Callback : (Value : ValueType) -> ()) -> SignalConnection }
+
+const function BridgeSignal(Source : any, InitialValue : any) : Graph.Node<any>
+	local Connector = if Source ~= nil then Source.Connect else nil
+	if Connector == nil and type(Source) == "table" then
+		Connector = Source.connect
+	end
+	assert(type(Connector) == "function", "FromSignal expects a source with Connect or connect")
+	local Node = CreateState(InitialValue)
+	local Active = true
+	local Connection : any = nil
+	Node:OnDestroy(function()
+		Active = false
+		local Current = Connection
+		Connection = nil
+		if Current ~= nil then
+			Current:Disconnect()
+		end
+	end)
+	if Graph.GetOwner() ~= nil then
+		Graph.Cleanup(Node)
+	end
+	local Passed, Result = pcall(Connector, Source, function(Value : any)
+		if Active then
+			Node:Set(Value)
+		end
+	end)
+	if not Passed then
+		Node:Destroy()
+		error(Result, 0)
+	end
+	if Active then
+		Connection = Result
+	else
+		Result:Disconnect()
+	end
+	return Node
+end
+
+Bind.FromSignal = BridgeSignal :: (<ValueType>(
+	Source : SignalSource<ValueType>,
+	InitialValue : ValueType
+) -> Graph.Node<ValueType>) & (<ValueType>(
+	Source : SignalSource<ValueType>
+) -> Graph.Node<ValueType?>) & (<ValueType>(
+	Source : RBXScriptSignal,
+	InitialValue : ValueType
+) -> Graph.Node<ValueType>) & ((Source : RBXScriptSignal) -> Graph.Node<unknown>)
+
+function Bind.Listen<ValueType>(Node : Graph.Node<ValueType>, Callback : (ValueType) -> ()) : () -> ()
+	assert(IsReactiveNode(Node), "Listen expects a reactive node")
+	assert(type(Callback) == "function", "Listen expects a callback")
+	local PreviousValue : ValueType? = ReadRawValue(Node)
+	local Receiver : ((ValueType) -> ())? = Callback
+	local Effect : Graph.Node<any>? = nil
+
+	local function Stop()
+		Receiver = nil
+		PreviousValue = nil
+		local Current = Effect
+		Effect = nil
+		if Current ~= nil then
+			Current:Destroy()
+		end
+	end
+
+	Node:OnDestroy(Stop)
+	if Receiver ~= nil then
+		Effect = CreateEffect(function()
+			local Value = ReadNodeValue(Node)
+			local Deliver = Receiver
+			if Deliver ~= nil and Value ~= PreviousValue then
+				PreviousValue = Value
+				RunUntracked(function()
+					Deliver(Value)
+				end)
+			end
+		end)
+	end
+	if Graph.GetOwner() ~= nil then
+		Graph.Cleanup(Stop)
+	end
+	return Stop
 end
 
 return table.freeze(Bind)

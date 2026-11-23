@@ -8,7 +8,7 @@ local ReadRawValue = Graph.Raw
 local ReadReactiveValue = Graph.Read
 local CreateState = Graph.State
 local RunUntracked = Graph.Untrack
-local RunRetracked = Graph.Retrack
+local RunWithOwner = Graph.WithOwner
 local TaskLibrary = Compatibility.Task
 
 const function GatedOff(ReactiveSource : any, Input : any) : boolean
@@ -40,6 +40,9 @@ type Data = {
 	Source : any,
 	Fetcher : any,
 	FetchIdentifier : number,
+	FirstEffectRan : boolean,
+	HandledBeforeFirstEffect : boolean,
+	InputBeforeFirstEffect : any,
 }
 
 const function RunFetcher(Self : Data, Input : any, CurrentIdentifier : number, Refetching : any)
@@ -63,9 +66,11 @@ const function Trigger(Self : Data, Input : any, Refetching : any)
 	Self.Loading:Set(true)
 	Self.Error:Set(nil)
 	Self.State:Set(if Self.HasResolved then "Refreshing" else "Pending")
-	RunUntracked()
-	TaskLibrary.spawn(RunFetcher, Self, Input, CurrentIdentifier, Refetching)
-	RunRetracked()
+	RunUntracked(function()
+		RunWithOwner(nil, function()
+			TaskLibrary.spawn(RunFetcher, Self, Input, CurrentIdentifier, Refetching)
+		end)
+	end)
 end
 
 local Asynchronous = {}
@@ -89,10 +94,25 @@ const function Create(Source : any, Fetcher : any, InitialValue : any) : Asynchr
 		Source = ReactiveSource,
 		Fetcher = Fetch,
 		FetchIdentifier = 0,
+		FirstEffectRan = false,
+		HandledBeforeFirstEffect = false,
+		InputBeforeFirstEffect = nil,
 	}, Asynchronous)
 
 	Self.Effect = CreateEffect(function()
 		local Input = ReadReactiveValue(ReactiveSource)
+		if not Self.FirstEffectRan then
+			Self.FirstEffectRan = true
+			local PreviousInput = Self.InputBeforeFirstEffect
+			local AlreadyHandled = Self.HandledBeforeFirstEffect
+			Self.InputBeforeFirstEffect = nil
+			Self.HandledBeforeFirstEffect = false
+			if AlreadyHandled and (ReactiveSource == nil or rawequal(Input, PreviousInput)
+				or (type(Input) == "number" and type(PreviousInput) == "number"
+					and Input ~= Input and PreviousInput ~= PreviousInput)) then
+				return
+			end
+		end
 		if GatedOff(ReactiveSource, Input) then
 			Self.FetchIdentifier += 1
 			Self.Loading:Set(false)
@@ -124,9 +144,19 @@ function Asynchronous.Destroy(Self : Data)
 	Self.FetchIdentifier = NextIdentifier
 end
 
+const function RememberInitialInput(Self : Data, Input : any)
+	if not Self.FirstEffectRan then
+		Self.HandledBeforeFirstEffect = true
+		Self.InputBeforeFirstEffect = Input
+	end
+end
+
 function Asynchronous.Mutate(Self : Data, Value : any)
 	if Self.Effect == nil then
 		return
+	end
+	if not Self.FirstEffectRan then
+		RememberInitialInput(Self, ReadRawValue(Self.Source))
 	end
 	Self.FetchIdentifier += 1
 	Self.HasResolved = true
@@ -145,6 +175,7 @@ function Asynchronous.Refetch(Self : Data, Refetching : any?)
 	if GatedOff(ReactiveSource, Input) then
 		return
 	end
+	RememberInitialInput(Self, Input)
 	Trigger(Self, Input, if Refetching == nil then true else Refetching)
 end
 

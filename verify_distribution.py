@@ -32,8 +32,19 @@ def main():
     cli = str(Path(args.luau).resolve())
     print("CLI SHA256:", hashlib.sha256(Path(cli).read_bytes()).hexdigest(), flush=True)
     for script, required in [
-        ("test/spec.client.luau", ["253 passed", "0 failed", "78 skipped"]),
+        ("test/spec.client.luau", ["255 passed", "0 failed", "82 skipped"]),
         ("verification/CoreCounts.luau", ["COUNTS PASS: 9"]),
+        ("verification/FluxV052LiveGraph.luau", ["DEEP LIVE GRAPH PASS"]),
+        ("verification/FluxV052GraphHeight.luau", ["LIVE HEIGHT CHANGE PASS"]),
+        ("verification/FluxV052Graph.luau", ["DEEP DORMANT PASS", "COMPUTED PREVIOUS AND SAFE RESET PASS", "DYNAMIC DEPENDENCIES AND DISPOSAL PASS"]),
+        ("verification/FluxV052Mapping.luau", ["FLUX V052 MAPPING PASS"]),
+        ("verification/FluxV052Signals.luau", ["FLUX V052 SIGNALS PASS"]),
+        ("verification/FluxV052Async.luau", ["FLUX V052 ASYNC PASS"]),
+        ("verification/FluxV052Merge.luau", ["FLUX V052 MERGE PASS"]),
+        ("verification/FluxV052Mount.luau", ["FLUX V052 MOUNT PASS"]),
+        ("verification/FluxV052TypedUI.luau", ["FLUX V052 TYPED UI PASS"]),
+        ("verification/FluxV052Store.luau", ["FLUX V052 STORE PASS"]),
+        ("verification/FluxV052ClockMotion.luau", ["FLUX V052 CLOCK MOTION PASS"]),
     ]:
         command = [cli, "-O2", script]
         result = subprocess.run(command, cwd=package, capture_output=True, text=True,

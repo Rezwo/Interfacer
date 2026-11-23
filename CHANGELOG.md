@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Port Flux v0.5.2 keyed mapping and mapper empty fallbacks, change-only listeners and signal bridging, merged property views, async pre-flush deduplication, flex configuration, layout scale and tween snapping.
+- Keep the previous evaluator and Interfacer-specific extras unchanged in this checkpoint. Native acceptance and the full Flux sync are still pending.
+
 - Expand abbreviated private store, mapping and asynchronous identifiers.
 - Expand compact control flow and return bodies into readable multiline blocks.
 - Preserve the public API and all 27 optimized instruction disassemblies.

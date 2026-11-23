@@ -38,6 +38,7 @@ export type Portal = Overlay.Portal
 export type Modal = Overlay.Modal
 export type ModalStack = Overlay.ModalStack
 export type Owner = Graph.Owner
+export type DefaultProp<ValueType> = Type.DefaultProp<ValueType>
 export type Cleanable = Graph.Cleanable
 
 export type Properties<ClassName, Extra = {}> = Type.Merge<
@@ -59,6 +60,7 @@ export type AsynchronousState = Asynchronous.AsynchronousState
 export type Context<ValueType> = Graph.Context<ValueType>
 export type Selector<KeyType> = Conditional.Selector<KeyType>
 export type Spring<ValueType> = Motion.Spring<ValueType>
+export type Tween<ValueType> = Motion.TweenNode<ValueType>
 export type HoverOptions = Interact.HoverOptions
 
 export type Breakpoint = Responsive.Breakpoint
@@ -75,6 +77,7 @@ export type FlexAlign = Layout.FlexAlign
 export type LineAlign = Layout.LineAlign
 export type Direction = Layout.Direction
 export type FlexMode = Layout.FlexMode
+export type FlexConfiguration = Layout.FlexConfiguration
 export type PaddingSides = Layout.PaddingSides
 export type CornerSides = Layout.CornerSides
 export type ListConfiguration = Layout.ListConfiguration
@@ -136,6 +139,10 @@ local Interfacer = {
 		Focused = Interact.Focused,
 	}),
 
+	Layout = table.freeze({
+		Scale = Layout.Scale,
+	}),
+
 	Motion = table.freeze({
 		Step = Motion.Step,
 	}),
@@ -189,6 +196,8 @@ local Interfacer = {
 	Retrack = Graph.Retrack,
 	IsNode = Graph.IsNode,
 	IsReactive = Graph.IsReactive,
+	FromSignal = Bind.FromSignal,
+	Listen = Bind.Listen,
 	On = Bind.On,
 
 	Context = Graph.Context,
@@ -197,6 +206,10 @@ local Interfacer = {
 	Selector = Conditional.Selector,
 	CreateStore = Store.New,
 	Split = Edit.Split,
+	Prop = Edit.Prop,
+	Own = Edit.Own,
+	Merge = Edit.Merge,
+	Mount = Edit.Mount,
 	Safe = Graph.Safe,
 
 	Property = Bind.Property,
@@ -212,6 +225,7 @@ local Interfacer = {
 	Fallback = Conditional.Fallback,
 	ForValue = Conditional.ForValue,
 	ForIndex = Conditional.ForIndex,
+	ForKey = Conditional.ForKey,
 	Spring = Motion.Spring,
 	Tween = Motion.Tween,
 
