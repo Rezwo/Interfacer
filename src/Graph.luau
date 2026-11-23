@@ -318,7 +318,72 @@ const function MarkActiveComputation(GraphRecord : any)
 	end
 end
 
-const function RaiseComputationHeight(GraphRecord : any, HeightValue : number)
+local IterativeTraversalDepth = 128
+
+const function RaiseHeightIteratively(RootRecord : any, RootHeight : number)
+	local Records : { any } = { RootRecord }
+	local Heights : { number } = { RootHeight }
+	local ObserverIndices : { number } = { 0 }
+	local ActiveRecords : { [any] : boolean } = { [RootRecord] = true }
+	local StackDepth = 1
+
+	while StackDepth > 0 do
+		local GraphRecord = Records[StackDepth]
+		local HeightValue = Heights[StackDepth]
+		local ObserverIndex = ObserverIndices[StackDepth]
+		if ObserverIndex == 0 then
+			GraphRecord[HeightSlot] = HeightValue
+			if GraphRecord[StampSlot] <= IdleLiveHeight then
+				GraphRecord[StampSlot] = HeightValue + LiveStampBase
+			end
+		end
+
+		local Observers = GraphRecord[ObserversSlot]
+		local NextRecord = nil
+		if Observers then
+			local ObserverHeight = Observers[HeightSlot]
+			if type(ObserverHeight) == "number" then
+				if ObserverIndex == 0 and ObserverHeight <= HeightValue then
+					NextRecord = Observers
+					ObserverIndices[StackDepth] = 1
+				end
+			else
+				local IndexValue = if ObserverIndex == 0 then 2 else ObserverIndex
+				while IndexValue <= Observers[1] do
+					local ObserverRecord = Observers[IndexValue]
+					IndexValue += 1
+					if ObserverRecord[HeightSlot] <= HeightValue then
+						NextRecord = ObserverRecord
+						ObserverIndices[StackDepth] = IndexValue
+						break
+					end
+				end
+			end
+		end
+
+		if NextRecord then
+			if ActiveRecords[NextRecord] then
+				error("[Flux] cyclic computation height dependency", 0)
+			end
+			ActiveRecords[NextRecord] = true
+			StackDepth += 1
+			Records[StackDepth] = NextRecord
+			Heights[StackDepth] = HeightValue + 1
+			ObserverIndices[StackDepth] = 0
+		else
+			ActiveRecords[GraphRecord] = nil
+			Records[StackDepth] = nil
+			StackDepth -= 1
+		end
+	end
+end
+
+const function RaiseComputationHeight(GraphRecord : any, HeightValue : number, Depth : number?)
+	local CurrentDepth = Depth or 0
+	if CurrentDepth >= IterativeTraversalDepth then
+		RaiseHeightIteratively(GraphRecord, HeightValue)
+		return
+	end
 	GraphRecord[HeightSlot] = HeightValue
 	if GraphRecord[StampSlot] <= IdleLiveHeight then
 		GraphRecord[StampSlot] = HeightValue + LiveStampBase
@@ -328,14 +393,14 @@ const function RaiseComputationHeight(GraphRecord : any, HeightValue : number)
 		local ObserverHeight = Observer[HeightSlot]
 		if type(ObserverHeight) == "number" then
 			if ObserverHeight <= HeightValue then
-				RaiseComputationHeight(Observer, HeightValue + 1)
+				RaiseComputationHeight(Observer, HeightValue + 1, CurrentDepth + 1)
 			end
 			return
 		end
 		for IndexValue = 2, Observer[1] do
 			local ObserverRecord = Observer[IndexValue]
 			if ObserverRecord[HeightSlot] <= HeightValue then
-				RaiseComputationHeight(ObserverRecord, HeightValue + 1)
+				RaiseComputationHeight(ObserverRecord, HeightValue + 1, CurrentDepth + 1)
 			end
 		end
 	end
@@ -374,7 +439,6 @@ local OldTail : { any } = {}
 local TailBusy = false
 local FreeNew : { any }? = {}
 
-local IterativeTraversalDepth = 128
 local ActivateComputation : (any, any, number?) -> ()
 local DeactivateComputation : (any, number?) -> ()
 

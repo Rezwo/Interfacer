@@ -43,4 +43,8 @@ A primed dormant chain of 24,000 computed nodes overflowed the old recursive ref
 
 ### Deep live follow-up
 
-Observer activation, demand settlement and last-observer release use iterative traversal once the recursive depth reaches 128. Attachment resolves each in-progress parent's height before propagating it to its own parent, avoiding repeated height propagation along the attaching chain. The 24,000-node replay covers hook order, two observers sharing the same chain, demand before Flush, exact recalculation counts, and full detachment. Cold user callback recursion and arbitrary height raises on already-live dynamic dependencies are not addressed here.
+Observer activation, demand settlement and last-observer release use iterative traversal once the recursive depth reaches 128. Attachment resolves each in-progress parent's height before propagating it to its own parent, avoiding repeated height propagation along the attaching chain. The 24,000-node replay covers hook order, two observers sharing the same chain, demand before Flush, exact recalculation counts, and full detachment. Cold user callback recursion is not addressed here. A separate follow-up bounds height propagation after dynamic dependency changes.
+
+### Dynamic height follow-up
+
+Changing an already-live 24,000-node chain to a taller dependency now walks downstream observers with an explicit stack past the depth threshold. The replay covers shared branches, one recalculation per affected link, further updates through the new source, and invalidation stopping after the source is detached. No public API or scheduler order changed.
