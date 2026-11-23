@@ -13,7 +13,7 @@ Source: [Flux v0.5.2](https://github.com/kohltastrophe/flux/tree/1a2ae9a332cef3f
 | Clock | Manual rescheduling replaces stale queue entries for the same thread. Newly scheduled timers wait until the next frame without blocking older eligible deadlines. Other upstream clock hardening remains pending. |
 | Input and responsive | Adapted release on interrupted input, and fallback to the live viewport when container measurements are unavailable. Other platform and occlusion changes are not part of this port. |
 | Graph | Adapted bounded-stack traversal for known dormant dependency chains, typed the existing computed previous value, and added the optional Safe reset callback. The live follow-up adapts bounded-stack observer attachment, demand settlement and detachment. The rest of the upstream evaluator is not replaced by this checkpoint. |
-| Overlays, exits, virtualization and examples | Unchanged; native and example validation pending. Sync is out of scope. |
+| Overlays, exits, virtualization and examples | Native extras replayed against the adapted graph. Ordinary VirtualCollection skips canvas-only scheduling while suspended. Reusable cells, overlay and exit implementations are unchanged. Sync is out of scope. |
 
 The pinned upstream standalone smoke passes. The 253 portable assertions, nine operation-count rows, and four focused port replays run through `verify_distribution.py`. The 78 native skips are not passes. This checkpoint does not claim Studio, performance, or release acceptance.
 
@@ -48,3 +48,7 @@ Observer activation, demand settlement and last-observer release use iterative t
 ### Dynamic height follow-up
 
 Changing an already-live 24,000-node chain to a taller dependency now walks downstream observers with an explicit stack past the depth threshold. The replay covers shared branches, one recalculation per affected link, further updates through the new source, and invalidation stopping after the source is detached. No public API or scheduler order changed.
+
+### Hidden virtual list follow-up
+
+The native replay demonstrates that repeated canvas movement on a disabled ScreenGui once scheduled one reconciliation per write even after all rows had been released. The ordinary collection now ignores offset-only work while suspended. Visibility still wakes the collection. This is separate from physical scrolling or measured frame-rate qualification.

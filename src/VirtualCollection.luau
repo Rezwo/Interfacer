@@ -105,6 +105,7 @@ type CollectionData = {
 	Closed : boolean,
 	Running : boolean,
 	Dirty : boolean,
+	Suspended : boolean,
 	Reanchor : boolean,
 	Revision : number,
 	Scale : number,
@@ -583,7 +584,8 @@ Reconcile = function(Self : CollectionData)
 	local Passed, Failure = pcall(function()
 		Self.Statistics.Reconciliations += 1
 		local Scale = Content.AbsoluteSize.X
-		if Scale <= 0 or not IsActive(Self) then
+		Self.Suspended = not IsActive(Self)
+		if Scale <= 0 or Self.Suspended then
 			Self.CommittedCanvasPosition = Viewport.CanvasPosition.Y
 			Self.FocusRequest = nil
 			for Key, Row in Self.Rows do
@@ -708,7 +710,11 @@ end
 
 const function DrainFrame(_DeltaTime : number)
 	for Viewport, Self in Collections do
-		if not Self.Closed and Self.CommittedCanvasPosition ~= Viewport.CanvasPosition.Y then
+		if
+			not Self.Closed
+			and not Self.Suspended
+			and Self.CommittedCanvasPosition ~= Viewport.CanvasPosition.Y
+		then
 			local Failure = if Self.FailureState then Self.FailureState:Peek() else nil
 			if not Failure or Failure.Stage ~= "Render" then
 				Self.Dirty = true
@@ -1010,6 +1016,7 @@ const function New<ItemType>(Viewport : ScrollingFrame, Configuration : Options<
 		Closed = false,
 		Running = false,
 		Dirty = false,
+		Suspended = false,
 		Reanchor = false,
 		Revision = 0,
 		Scale = 1,
@@ -1070,7 +1077,9 @@ const function New<ItemType>(Viewport : ScrollingFrame, Configuration : Options<
 				Self.Connections,
 				Viewport:GetPropertyChangedSignal("CanvasPosition"),
 				function()
-					MarkDirty(Self)
+					if not Self.Suspended then
+						MarkDirty(Self)
+					end
 				end
 			)
 			Connect(
