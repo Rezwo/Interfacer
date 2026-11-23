@@ -374,10 +374,11 @@ local OldTail : { any } = {}
 local TailBusy = false
 local FreeNew : { any }? = {}
 
-local ActivateComputation : (any, any) -> ()
-local DeactivateComputation : (any) -> ()
+local IterativeTraversalDepth = 128
+local ActivateComputation : (any, any, number?) -> ()
+local DeactivateComputation : (any, number?) -> ()
 
-const function SubscribeObserver(SourceRecord : any, ObserverRecord : any) : number
+const function SubscribeObserver(SourceRecord : any, ObserverRecord : any, Depth : number?) : number
 	local SourceHeight = SourceRecord[HeightSlot]
 	if not SourceHeight then
 		local InitialCount = SourceRecord[ObserversSlot]
@@ -398,7 +399,7 @@ const function SubscribeObserver(SourceRecord : any, ObserverRecord : any) : num
 		return 0
 	elseif not List then
 		Count = 2
-		ActivateComputation(SourceRecord, ObserverRecord)
+		ActivateComputation(SourceRecord, ObserverRecord, Depth)
 		SourceHeight = SourceRecord[HeightSlot]
 	elseif type(List[HeightSlot]) == "number" then
 		SourceRecord[ObserversSlot] = { 3, List, ObserverRecord }
@@ -409,21 +410,30 @@ const function SubscribeObserver(SourceRecord : any, ObserverRecord : any) : num
 		List[Count] = ObserverRecord
 	end
 	if SourceHeight >= ObserverRecord[HeightSlot] then
-		if ObserverRecord[ObserversSlot] then
+		if Depth == nil and ObserverRecord[ObserversSlot] then
 			RaiseComputationHeight(ObserverRecord, SourceHeight + 1)
 		else
 			ObserverRecord[HeightSlot] = SourceHeight + 1
+			if Depth ~= nil and ObserverRecord[ObserversSlot] and ObserverRecord[StampSlot] <= IdleLiveHeight then
+				ObserverRecord[StampSlot] = SourceHeight + 1 + LiveStampBase
+			end
 		end
 	end
 	return Count
 end
 
-const function UnsubscribeObserver(SourceRecord : any, ObserverRecord : any, OtherIndex : number)
+const function UnsubscribeObserver(
+	SourceRecord : any,
+	ObserverRecord : any,
+	OtherIndex : number,
+	Depth : number?,
+	DeferDeactivation : boolean?
+) : boolean?
 	local HeightValue = SourceRecord[HeightSlot]
 	if not HeightValue then
 		local Count = SourceRecord[ObserversSlot]
 		if Count == nil then
-			return
+			return nil
 		end
 		local Last = Count + SignalObserverOffset
 		if OtherIndex ~= Count then
@@ -436,15 +446,18 @@ const function UnsubscribeObserver(SourceRecord : any, ObserverRecord : any, Oth
 		if AnyHooks and Count == 1 then
 			FireHook(SourceRecord, 2)
 		end
-		return
+		return nil
 	end
 	local List = SourceRecord[ObserversSlot]
 	if List == ObserverRecord then
 		SourceRecord[ObserversSlot] = false
-		DeactivateComputation(SourceRecord)
-		return
+		if DeferDeactivation then
+			return true
+		end
+		DeactivateComputation(SourceRecord, Depth)
+		return nil
 	elseif not List or type(List[HeightSlot]) == "number" then
-		return
+		return nil
 	end
 	local Count = List[1]
 	if OtherIndex ~= Count then
@@ -455,36 +468,17 @@ const function UnsubscribeObserver(SourceRecord : any, ObserverRecord : any, Oth
 	List[Count] = nil
 	if Count == 2 then
 		SourceRecord[ObserversSlot] = false
-		DeactivateComputation(SourceRecord)
+		if DeferDeactivation then
+			return true
+		end
+		DeactivateComputation(SourceRecord, Depth)
 	else
 		List[1] = Count - 1
 	end
+	return nil
 end
 
-function ActivateComputation(GraphRecord : any, ObserverRecord : any)
-	if AnyHooks then
-		GraphRecord[ObserversSlot] = ObserverRecord
-	end
-	local Last = GraphRecord[SourceEndSlot] - 2
-	for IndexValue = FirstSourceSlot, Last, 2 do
-		local SourceRecord = GraphRecord[IndexValue]
-		if not SourceRecord[HeightSlot] then
-			local InitialCount = SourceRecord[ObserversSlot]
-			if InitialCount then
-				local Count = InitialCount + 1
-				SourceRecord[ObserversSlot] = Count
-				SourceRecord[Count + SignalObserverOffset] = GraphRecord
-				GraphRecord[IndexValue + 1] = Count
-				if AnyHooks and Count == 1 then
-					FireHook(SourceRecord, 1)
-				end
-			else
-				GraphRecord[IndexValue + 1] = 0
-			end
-		else
-			GraphRecord[IndexValue + 1] = SubscribeObserver(SourceRecord, GraphRecord)
-		end
-	end
+const function FinishActivation(GraphRecord : any, ObserverRecord : any, Last : number)
 	GraphRecord[ObserversSlot] = ObserverRecord
 	local StampValue = GraphRecord[StampSlot]
 	if StampValue == Epoch then
@@ -511,20 +505,112 @@ function ActivateComputation(GraphRecord : any, ObserverRecord : any)
 	end
 end
 
-function DeactivateComputation(GraphRecord : any)
-	for IndexValue = GraphRecord[SourceEndSlot] - 2, FirstSourceSlot, -2 do
-		local SourceRecord, OtherIndex = GraphRecord[IndexValue], GraphRecord[IndexValue + 1]
-		local Observer = SourceRecord[ObserversSlot]
-		if Observer == OtherIndex and not AnyHooks then
-			SourceRecord[OtherIndex + SignalObserverOffset] = nil
-			SourceRecord[ObserversSlot] = OtherIndex - 1
-		elseif Observer == GraphRecord then
-			SourceRecord[ObserversSlot] = false
-			DeactivateComputation(SourceRecord)
-		else
-			UnsubscribeObserver(SourceRecord, GraphRecord, OtherIndex)
+const function ActivateIteratively(RootRecord : any, RootObserver : any)
+	local Records : { any } = { RootRecord }
+	local Observers : { any } = { RootObserver }
+	local SourceIndices : { number } = { FirstSourceSlot }
+	local LastIndices : { number } = { RootRecord[SourceEndSlot] - 2 }
+	local ActiveRecords : { [any] : boolean } = { [RootRecord] = true }
+	local StackDepth = 1
+	if AnyHooks then
+		RootRecord[ObserversSlot] = RootObserver
+	end
+	while StackDepth > 0 do
+		local GraphRecord = Records[StackDepth]
+		local ObserverRecord = Observers[StackDepth]
+		local SourceIndex = SourceIndices[StackDepth]
+		local Last = LastIndices[StackDepth]
+		local Descended = false
+		while SourceIndex <= Last do
+			local SourceRecord = GraphRecord[SourceIndex]
+			if not SourceRecord[HeightSlot] then
+				local InitialCount = SourceRecord[ObserversSlot]
+				if InitialCount then
+					local Count = InitialCount + 1
+					SourceRecord[ObserversSlot] = Count
+					SourceRecord[Count + SignalObserverOffset] = GraphRecord
+					GraphRecord[SourceIndex + 1] = Count
+					if AnyHooks and Count == 1 then
+						FireHook(SourceRecord, 1)
+					end
+				else
+					GraphRecord[SourceIndex + 1] = 0
+				end
+			elseif SourceRecord[ObserversSlot] == false then
+				if ActiveRecords[SourceRecord] then
+					error("[Flux] cyclic live computation dependency", 0)
+				end
+				SourceIndices[StackDepth] = SourceIndex
+				StackDepth += 1
+				Records[StackDepth] = SourceRecord
+				Observers[StackDepth] = GraphRecord
+				SourceIndices[StackDepth] = FirstSourceSlot
+				LastIndices[StackDepth] = SourceRecord[SourceEndSlot] - 2
+				ActiveRecords[SourceRecord] = true
+				if AnyHooks then
+					SourceRecord[ObserversSlot] = GraphRecord
+				end
+				Descended = true
+				break
+			else
+				GraphRecord[SourceIndex + 1] = SubscribeObserver(SourceRecord, GraphRecord, IterativeTraversalDepth)
+			end
+			SourceIndex += 2
+		end
+		if not Descended then
+			FinishActivation(GraphRecord, ObserverRecord, Last)
+			ActiveRecords[GraphRecord] = nil
+			Records[StackDepth], Observers[StackDepth] = nil, nil
+			StackDepth -= 1
+			if StackDepth > 0 then
+				local ParentSourceIndex = SourceIndices[StackDepth]
+				local SourceHeight = GraphRecord[HeightSlot]
+				if SourceHeight >= ObserverRecord[HeightSlot] then
+					ObserverRecord[HeightSlot] = SourceHeight + 1
+					if ObserverRecord[ObserversSlot] and ObserverRecord[StampSlot] <= IdleLiveHeight then
+						ObserverRecord[StampSlot] = SourceHeight + 1 + LiveStampBase
+					end
+				end
+				ObserverRecord[ParentSourceIndex + 1] = 2
+				SourceIndices[StackDepth] = ParentSourceIndex + 2
+			end
 		end
 	end
+end
+
+function ActivateComputation(GraphRecord : any, ObserverRecord : any, Depth : number?)
+	local CurrentDepth = Depth or 0
+	if CurrentDepth >= IterativeTraversalDepth then
+		ActivateIteratively(GraphRecord, ObserverRecord)
+		return
+	end
+	if AnyHooks then
+		GraphRecord[ObserversSlot] = ObserverRecord
+	end
+	local Last = GraphRecord[SourceEndSlot] - 2
+	for IndexValue = FirstSourceSlot, Last, 2 do
+		local SourceRecord = GraphRecord[IndexValue]
+		if not SourceRecord[HeightSlot] then
+			local InitialCount = SourceRecord[ObserversSlot]
+			if InitialCount then
+				local Count = InitialCount + 1
+				SourceRecord[ObserversSlot] = Count
+				SourceRecord[Count + SignalObserverOffset] = GraphRecord
+				GraphRecord[IndexValue + 1] = Count
+				if AnyHooks and Count == 1 then
+					FireHook(SourceRecord, 1)
+				end
+			else
+				GraphRecord[IndexValue + 1] = 0
+			end
+		else
+			GraphRecord[IndexValue + 1] = SubscribeObserver(SourceRecord, GraphRecord, CurrentDepth + 1)
+		end
+	end
+	FinishActivation(GraphRecord, ObserverRecord, Last)
+end
+
+const function FinishDeactivation(GraphRecord : any)
 	local StampValue = GraphRecord[StampSlot]
 	if
 		StampValue <= MaximumLiveHeightLimit or (StampValue > 0 and MinimumHeapHeight == Infinity)
@@ -541,6 +627,67 @@ function DeactivateComputation(GraphRecord : any)
 	if AnyHooks then
 		FireHook(GraphRecord, 2)
 	end
+end
+
+const function DeactivateIteratively(RootRecord : any)
+	local Records : { any } = { RootRecord }
+	local SourceIndices : { number } = { RootRecord[SourceEndSlot] - 2 }
+	local StackDepth = 1
+	while StackDepth > 0 do
+		local GraphRecord = Records[StackDepth]
+		local SourceIndex = SourceIndices[StackDepth]
+		local Descended = false
+		while SourceIndex >= FirstSourceSlot do
+			local SourceRecord, OtherIndex = GraphRecord[SourceIndex], GraphRecord[SourceIndex + 1]
+			local Observer = SourceRecord[ObserversSlot]
+			local LostLastObserver = false
+			if Observer == OtherIndex and not AnyHooks then
+				SourceRecord[OtherIndex + SignalObserverOffset] = nil
+				SourceRecord[ObserversSlot] = OtherIndex - 1
+			elseif Observer == GraphRecord then
+				SourceRecord[ObserversSlot] = false
+				LostLastObserver = true
+			else
+				LostLastObserver = UnsubscribeObserver(SourceRecord, GraphRecord, OtherIndex, nil, true) == true
+			end
+			SourceIndex -= 2
+			if LostLastObserver then
+				SourceIndices[StackDepth] = SourceIndex
+				StackDepth += 1
+				Records[StackDepth] = SourceRecord
+				SourceIndices[StackDepth] = SourceRecord[SourceEndSlot] - 2
+				Descended = true
+				break
+			end
+		end
+		if not Descended then
+			FinishDeactivation(GraphRecord)
+			Records[StackDepth] = nil
+			StackDepth -= 1
+		end
+	end
+end
+
+function DeactivateComputation(GraphRecord : any, Depth : number?)
+	local CurrentDepth = Depth or 0
+	if CurrentDepth >= IterativeTraversalDepth then
+		DeactivateIteratively(GraphRecord)
+		return
+	end
+	for IndexValue = GraphRecord[SourceEndSlot] - 2, FirstSourceSlot, -2 do
+		local SourceRecord, OtherIndex = GraphRecord[IndexValue], GraphRecord[IndexValue + 1]
+		local Observer = SourceRecord[ObserversSlot]
+		if Observer == OtherIndex and not AnyHooks then
+			SourceRecord[OtherIndex + SignalObserverOffset] = nil
+			SourceRecord[ObserversSlot] = OtherIndex - 1
+		elseif Observer == GraphRecord then
+			SourceRecord[ObserversSlot] = false
+			DeactivateComputation(SourceRecord, CurrentDepth + 1)
+		else
+			UnsubscribeObserver(SourceRecord, GraphRecord, OtherIndex, CurrentDepth + 1)
+		end
+	end
+	FinishDeactivation(GraphRecord)
 end
 
 const function ReconcileDependencies(
@@ -1049,22 +1196,7 @@ const function RunComputed(GraphRecord : any)
 	end
 end
 
-const function Settle(GraphRecord : any)
-	for IndexValue = FirstSourceSlot, GraphRecord[SourceEndSlot] - 2, 2 do
-		local SourceRecord = GraphRecord[IndexValue]
-		local HeightValue = SourceRecord[HeightSlot]
-		if HeightValue and HeightValue >= MinimumHeapHeight then
-			local StampValue = SourceRecord[StampSlot]
-			if
-				StampValue > MaximumLiveHeightLimit
-				and StampValue ~= Epoch
-				and StampValue ~= StaleStamp
-				and StampValue ~= ErroredStamp
-			then
-				Settle(SourceRecord)
-			end
-		end
-	end
+const function FinishSettlement(GraphRecord : any)
 	local StampValue = GraphRecord[StampSlot]
 	if StampValue <= 0 and StampValue >= StaleStamp then
 		RunComputed(GraphRecord)
@@ -1076,8 +1208,77 @@ const function Settle(GraphRecord : any)
 	end
 end
 
+const function SettleIteratively(RootRecord : any)
+	local Records : { any } = { RootRecord }
+	local SourceIndices : { number } = { FirstSourceSlot }
+	local LastIndices : { number } = { RootRecord[SourceEndSlot] - 2 }
+	local ActiveRecords : { [any] : boolean } = { [RootRecord] = true }
+	local StackDepth = 1
+	while StackDepth > 0 do
+		local GraphRecord = Records[StackDepth]
+		local SourceIndex = SourceIndices[StackDepth]
+		local Last = LastIndices[StackDepth]
+		local Descended = false
+		while SourceIndex <= Last do
+			local SourceRecord = GraphRecord[SourceIndex]
+			SourceIndex += 2
+			local HeightValue = SourceRecord[HeightSlot]
+			if HeightValue and HeightValue >= MinimumHeapHeight then
+				local StampValue = SourceRecord[StampSlot]
+				if
+					StampValue > MaximumLiveHeightLimit
+					and StampValue ~= Epoch
+					and StampValue ~= StaleStamp
+					and StampValue ~= ErroredStamp
+				then
+					if ActiveRecords[SourceRecord] then
+						error("[Flux] cyclic live settlement dependency", 0)
+					end
+					SourceIndices[StackDepth] = SourceIndex
+					StackDepth += 1
+					Records[StackDepth] = SourceRecord
+					SourceIndices[StackDepth] = FirstSourceSlot
+					LastIndices[StackDepth] = SourceRecord[SourceEndSlot] - 2
+					ActiveRecords[SourceRecord] = true
+					Descended = true
+					break
+				end
+			end
+		end
+		if not Descended then
+			ActiveRecords[GraphRecord] = nil
+			Records[StackDepth] = nil
+			StackDepth -= 1
+			FinishSettlement(GraphRecord)
+		end
+	end
+end
+
+const function Settle(GraphRecord : any, Depth : number?)
+	local CurrentDepth = Depth or 0
+	if CurrentDepth >= IterativeTraversalDepth then
+		SettleIteratively(GraphRecord)
+		return
+	end
+	for IndexValue = FirstSourceSlot, GraphRecord[SourceEndSlot] - 2, 2 do
+		local SourceRecord = GraphRecord[IndexValue]
+		local HeightValue = SourceRecord[HeightSlot]
+		if HeightValue and HeightValue >= MinimumHeapHeight then
+			local StampValue = SourceRecord[StampSlot]
+			if
+				StampValue > MaximumLiveHeightLimit
+				and StampValue ~= Epoch
+				and StampValue ~= StaleStamp
+				and StampValue ~= ErroredStamp
+			then
+				Settle(SourceRecord, CurrentDepth + 1)
+			end
+		end
+	end
+	FinishSettlement(GraphRecord)
+end
+
 local Refresh : (any, number?) -> ()
-local IterativeRefreshDepth = 128
 
 const function RefreshDormantIteratively(RootRecord : any)
 	local Records : { any } = { RootRecord }
@@ -1154,7 +1355,7 @@ end
 
 const function RefreshDormantComputation(GraphRecord : any, Depth : number?)
 	local CurrentDepth = Depth or 0
-	if CurrentDepth >= IterativeRefreshDepth then
+	if CurrentDepth >= IterativeTraversalDepth then
 		RefreshDormantIteratively(GraphRecord)
 		return
 	end

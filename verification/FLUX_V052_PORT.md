@@ -12,7 +12,7 @@ Source: [Flux v0.5.2](https://github.com/kohltastrophe/flux/tree/1a2ae9a332cef3f
 | Store | Adapted multi-parent proxy ownership, cyclic reconcile, safe orphan teardown, NaN keyed matching, and frozen table handling. Registered cleanup already took precedence over a Destroy data key. |
 | Clock | Manual rescheduling replaces stale queue entries for the same thread. Newly scheduled timers wait until the next frame without blocking older eligible deadlines. Other upstream clock hardening remains pending. |
 | Input and responsive | Adapted release on interrupted input, and fallback to the live viewport when container measurements are unavailable. Other platform and occlusion changes are not part of this port. |
-| Graph | Adapted bounded-stack traversal for known dormant dependency chains, typed the existing computed previous value, and added the optional Safe reset callback. Live settlement, attachment/disposal internals, and the rest of the upstream evaluator are not replaced by this checkpoint. |
+| Graph | Adapted bounded-stack traversal for known dormant dependency chains, typed the existing computed previous value, and added the optional Safe reset callback. The live follow-up adapts bounded-stack observer attachment, demand settlement and detachment. The rest of the upstream evaluator is not replaced by this checkpoint. |
 | Overlays, exits, virtualization and examples | Unchanged; native and example validation pending. Sync is out of scope. |
 
 The pinned upstream standalone smoke passes. The 253 portable assertions, nine operation-count rows, and four focused port replays run through `verify_distribution.py`. The 78 native skips are not passes. This checkpoint does not claim Studio, performance, or release acceptance.
@@ -40,3 +40,7 @@ ScaleOf and BreakpointOf accept unavailable container measurements and follow th
 ## Graph follow-up
 
 A primed dormant chain of 24,000 computed nodes overflowed the old recursive refresh after a source update. The fallback switches from recursive to explicit-stack traversal after 128 known dormant dependencies. It does not make cold callback recursion or all live paths unbounded. Computed callbacks may declare an optional previous value. A function-style Safe fallback may save a second reset argument for retrying after the attempt returns; the retry coalesces before evaluation and is revoked on disposal. The graph operation fixtures and exact counts remain required.
+
+### Deep live follow-up
+
+Observer activation, demand settlement and last-observer release use iterative traversal once the recursive depth reaches 128. Attachment resolves each in-progress parent's height before propagating it to its own parent, avoiding repeated height propagation along the attaching chain. The 24,000-node replay covers hook order, two observers sharing the same chain, demand before Flush, exact recalculation counts, and full detachment. Cold user callback recursion and arbitrary height raises on already-live dynamic dependencies are not addressed here.
