@@ -749,7 +749,7 @@ const function BridgeSignal(Source : any, InitialValue : any) : Graph.Node<any>
 	assert(type(Connector) == "function", "FromSignal expects a source with Connect or connect")
 	local Node = CreateState(InitialValue)
 	local Active = true
-	local Connection : any = nil
+	local Connection : SignalConnection? = nil
 	Node:OnDestroy(function()
 		Active = false
 		local Current = Connection
@@ -770,10 +770,11 @@ const function BridgeSignal(Source : any, InitialValue : any) : Graph.Node<any>
 		Node:Destroy()
 		error(Result, 0)
 	end
+	local Connected = Result :: SignalConnection
 	if Active then
-		Connection = Result
+		Connection = Connected
 	else
-		Result:Disconnect()
+		Connected:Disconnect()
 	end
 	return Node
 end
