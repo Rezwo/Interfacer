@@ -422,7 +422,6 @@ export type Editable = Creatable & {
 	BrowserService : BrowserService,
 	BubbleChatConfiguration : BubbleChatConfiguration,
 	BugReporterService : BugReporterService,
-	BulkImportService : BulkImportService,
 	CSGDictionaryService : CSGDictionaryService,
 	CacheableContentProvider : CacheableContentProvider,
 	CallingService : CallingService,
@@ -699,8 +698,6 @@ export type Editable = Creatable & {
 	PlatformFriendsService : PlatformFriendsService,
 	PlatformLibraries : PlatformLibraries,
 	PlayerData : PlayerData,
-	PlayerDataRecord : PlayerDataRecord,
-	PlayerDataRecordConfig : PlayerDataRecordConfig,
 	PlayerDataService : PlayerDataService,
 	PlayerEmulatorService : PlayerEmulatorService,
 	PlayerGui : PlayerGui,
@@ -941,7 +938,6 @@ export type Editable = Creatable & {
 	Workspace : Workspace,
 	WorldRoot : WorldRoot,
 	WrapContentProvider : WrapContentProvider,
-	WrapDeformMeshProvider : WrapDeformMeshProvider,
 }
 
 return nil

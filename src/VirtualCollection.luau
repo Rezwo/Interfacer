@@ -370,7 +370,7 @@ const function BuildRow(Self : CollectionData, Key : Key, Index : number) : RowD
 					return
 				end
 				assert(
-					typeof(Root) == "Instance" and Root:IsA("GuiObject") and Root.Parent == nil,
+					typeof(Root) == "Instance" and (Root :: Instance):IsA("GuiObject") and Root.Parent == nil,
 					"VirtualCollection Render must return one detached GuiObject"
 				)
 				assert(

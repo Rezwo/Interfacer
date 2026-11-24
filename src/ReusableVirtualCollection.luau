@@ -1214,7 +1214,7 @@ const function New<ItemType>(Viewport : ScrollingFrame, Configuration : Options<
 	local Passed, Failure = pcall(function()
 		local Owner = Graph.Scope(function(OwnerHandle)
 			Self.Owner = OwnerHandle
-			Self.Pool = Cells.New({
+			local PoolConfiguration : Cells.Configuration<ItemType> = {
 				CreateCell = Configuration.CreateCell,
 				SetVisible = function(Root : GuiObject, Visible : boolean)
 					Root.Visible = Visible
@@ -1226,7 +1226,8 @@ const function New<ItemType>(Viewport : ScrollingFrame, Configuration : Options<
 					InitializeCell(Self, Cell)
 				end,
 				BeforeRelease = BeforeRelease,
-			})
+			}
+			Self.Pool = Cells.New(PoolConfiguration)
 			local State = Graph.State(nil :: Failure?)
 			Self.FailureState = State
 			Self.Failure = Graph.Computed(function()

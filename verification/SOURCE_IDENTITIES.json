@@ -1,7 +1,7 @@
 {
   "sha256": {
     "src/Asynchronous.luau": "3ac89f0e55a5f2fb4566422c689b8da5170b9e8fd5cc1ed89527bf94aaea2891",
-    "src/Bind.luau": "5202138ad135c5c59394a0858e72e473b5d8accaa4a2d02af3b1f96e43203161",
+    "src/Bind.luau": "0c10806f6d7229c5122503731986c25c80b4077d39ab0ffe33f5d1b4afd9c6be",
     "src/Clock.luau": "770abc14b3461520791048ea3e204d2c22c81eac5653e0f663490f9299fa8622",
     "src/Compatibility.luau": "fe1f1461412d2876c58e5f9c0493df964891d77b8fa67d5933044a30d591fcec",
     "src/Conditional.luau": "77cccc69b35ff6bcde51a8f37e6feebebf5a3826d60438202cb0a0a4e0cc9dfe",
@@ -17,13 +17,13 @@
     "src/PresentationSurface.luau": "3c207e5859255c5033111076ce06b66854d7b412e839def6432ebed998218f5e",
     "src/Responsive.luau": "fdf3e0882d2ffa061d3bb5ab3ef5a1b4290b90da7935d6912453bbf45b1ee75a",
     "src/ReusableCellPool.luau": "31b5045b00065858f0affe82316e917aa3754f89863e9095106ef51f7f372f5a",
-    "src/ReusableVirtualCollection.luau": "c2d037f198eda2e13aaa3ee6f4586f332ca873d3ebf032cae84ab6eb2f79486a",
+    "src/ReusableVirtualCollection.luau": "a582c5ead9d07bc21b5a3c74cd7c212c27b4b3649f3423c226a074b5e2e70817",
     "src/ReusableWindow.luau": "7ac5ba34109db4c5dbce5890d09f5ff96a4a1d000b0d2b9016f8f01c4f95f5bb",
     "src/Store.luau": "11effc763fcc122a38765951b3a02c79c9629ba96e5ed12ee8b7f350f15caad4",
     "src/TransactionalNative.luau": "336719dedeaad9899499acff4d0e2bb2d2a3401889f2cfd0a6ed3126700defae",
-    "src/Type/Instances.luau": "aacf79e75769b4c59c35f86f75ba9cc424bb17a7ae81aa85cc968eb2c924d4c1",
+    "src/Type/Instances.luau": "e530e82fa9ccad8fc4722dd7960c57894a0d6c5d8a4187fa5f7fb77b66138fd7",
     "src/Type/init.luau": "bd937f341a83ac3ae74ad332db1ba2641c38249d4beaa6127a914c42cdf7ebe1",
-    "src/VirtualCollection.luau": "eb15d9906460bfed13b57ecd6b07cb46b1eca4c310e0aefdb8f30eab6a99b7dc",
+    "src/VirtualCollection.luau": "fa064f73c7476c1fb30216c2ba10070b1577ccaf318c5b73c0930e9a474cdbf6",
     "src/VirtualGeometry.luau": "ade2f40f0d151bfa3caed6d71bc62ecbab847d84d381843c2088ae514f053541",
     "src/VirtualSynchronous.luau": "f139b35a981a4a9d8c00caaff618986cbdc99b4eee964688d9c35c6ddbeaaf3c",
     "src/init.luau": "d47cda4b64871df9e1eba3aa4a56eff1f1a0ef54070116183cb64b77bbcd9105"
